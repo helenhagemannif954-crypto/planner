@@ -1,5 +1,5 @@
 // Быстрый ввод: разбор на лету, фишки, голос, запуск цепочек.
-import { h, icon, toast, choose, prompt, pickDate, pickTime, quickDays, buzz, clear } from '../ui.js';
+import { h, icon, toast, hideToast, choose, prompt, pickDate, pickTime, quickDays, buzz, clear } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
 import { parse, dateLabel, partLabel } from '../parse.js';
@@ -58,7 +58,7 @@ export function composer(mode = 'inline', opts = {}) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
     if (e.key === 'Escape' && mode === 'inline') { input.blur(); collapse(); }
   });
-  input.addEventListener('focus', () => { if (!state.open) { state.open = true; root.classList.add('open'); renderExtra(); } });
+  input.addEventListener('focus', () => { if (mode === 'inline') hideToast(); if (!state.open) { state.open = true; root.classList.add('open'); renderExtra(); } });
   function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; }
   function collapse() {
     if (mode !== 'inline' || state.text) return;

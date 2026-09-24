@@ -188,6 +188,7 @@ textarea.input { min-height: 5rem; resize: vertical; }
 /* ——— листы ——— */
 .overlay { position: fixed; inset: 0; background: rgba(20, 15, 10, 0); z-index: 50; display: flex; align-items: flex-end; justify-content: center; transition: background .2s; }
 .overlay.open { background: rgba(20, 15, 10, .35); }
+.overlay:not(.open) { pointer-events: none; }
 .sheet { width: 100%; max-width: 40rem; max-height: 92dvh; background: var(--surface); border-radius: 1.25rem 1.25rem 0 0; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .22s cubic-bezier(.2,.8,.3,1); padding-bottom: var(--safe-b); }
 .overlay.open .sheet { transform: none; }
 .sheet.full { height: 100dvh; max-height: none; border-radius: 0; }
@@ -230,6 +231,7 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .tcell.sel { background: var(--accent); color: var(--accent-ink); }
 
 /* ——— план ——— */
+.plan-head { position: sticky; top: -.25rem; z-index: 6; background: var(--bg); margin: 0 -1rem; padding: 0 1rem .1rem; }
 .daynav { display: flex; align-items: center; gap: .25rem; }
 .daynav b { flex: 1; text-align: center; }
 .timeline { position: relative; margin: .5rem 0 1rem 3rem; border-left: 1px solid var(--line); }
@@ -239,7 +241,7 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .tl-item.block { background: var(--surface2); box-shadow: none; border-left-color: var(--faint); color: var(--muted); }
 .tl-item.anchor { border-left-color: var(--gold); }
 .tl-item.done { opacity: .55; }
-.tl-free { position: absolute; left: .4rem; right: 0; border-radius: .6rem; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); font-size: .8125rem; padding: .2rem .6rem; display: flex; align-items: center; background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.tl-free { position: absolute; left: .4rem; right: 0; border-radius: .6rem; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); font-size: .8125rem; padding: .2rem .6rem; display: flex; align-items: flex-start; background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
 .tl-free.drop { background: var(--accent-soft); }
 .tl-now { position: absolute; left: -.3rem; right: 0; border-top: 2px solid var(--gold); z-index: 3; }
 .tl-now::before { content: ''; position: absolute; left: -.2rem; top: -.35rem; width: .6rem; height: .6rem; border-radius: 50%; background: var(--gold); }

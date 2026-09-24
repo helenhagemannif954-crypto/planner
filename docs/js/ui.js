@@ -67,7 +67,7 @@ const P = {
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z',
   cal: 'M5 6h14v14H5zM5 10h14M9 4v4M15 4v4M9 14h2',
   list: 'M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01',
-  grid: 'M12 4v16M4 12h16',
+  grid: 'M4.5 4.5h15v15h-15zM12 4.5v15M4.5 12h15',
   heart: 'M12 19s-7-4.4-7-9.5A4 4 0 0 1 12 7a4 4 0 0 1 7 2.5C19 14.6 12 19 12 19z',
   chain: 'M8 8h3M13 8h3M8 16h3M13 16h3M6 8a2 2 0 1 0 0 .01M18 8a2 2 0 1 0 0 .01M6 16a2 2 0 1 0 0 .01M18 16a2 2 0 1 0 0 .01M12 8v8',
   phone: 'M6 4h3l1.5 4-2 1.5a10 10 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z',
@@ -105,6 +105,8 @@ const stack = [];
 let armed = false; // есть ли в истории наша запись для листов
 let ignorePops = 0;
 export function sheet(build, opts = {}) {
+  // тост с «Отменить» не прячем, а поднимаем наверх, чтобы не закрывал лист
+  if (toastEl) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + .75rem)'; toastEl.style.bottom = 'auto'; }
   const overlay = h('div.overlay' + (opts.full ? '.full' : ''));
   const panel = h('div.sheet' + (opts.full ? '.full' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-label': opts.title || '' });
   const body = h('div.sheet-body');
@@ -143,6 +145,9 @@ function close(api, viaUser) {
 export function closeAll() { while (stack.length) close(stack[stack.length - 1], true); }
 export function topSheet() { return stack[stack.length - 1] || null; }
 export function initBack(onBack) {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && stack.length) { e.preventDefault(); close(stack[stack.length - 1], true); }
+  });
   window.addEventListener('popstate', () => {
     if (ignorePops) {
       ignorePops--;

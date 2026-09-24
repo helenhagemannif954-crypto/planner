@@ -9,17 +9,22 @@ import {
 import { churchDay, churchYear } from '../church.js';
 import { app, taskRow, emptyState, sectionHead, isHidden, deadlineLabel, areaDot, hiddenArea } from './common.js';
 
+const cap = (x) => x[0].toUpperCase() + x.slice(1);
 const MODES = [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц'], ['year', 'Год']];
 
 export function renderPlan(root) {
   if (!app.planDate) app.planDate = st.T();
-  root.append(h('div.seg', { role: 'group', 'aria-label': 'Масштаб' }, MODES.map(([k, l]) => h('button', {
+  // переключатель и навигация остаются наверху при прокрутке
+  const head = h('div.plan-head', h('div.seg', { role: 'group', 'aria-label': 'Масштаб' }, MODES.map(([k, l]) => h('button', {
     'aria-pressed': String(app.planMode === k), onclick: () => { app.planMode = k; app.render(); },
   }, l))));
-  if (app.planMode === 'day') renderDay(root, app.planDate);
-  else if (app.planMode === 'month') renderMonth(root, app.planDate);
-  else if (app.planMode === 'year') renderYear(root, app.planDate);
-  else renderWeek(root, app.planDate);
+  root.append(head);
+  const body = h('div');
+  root.append(body);
+  if (app.planMode === 'day') renderDay(body, app.planDate, head);
+  else if (app.planMode === 'month') renderMonth(body, app.planDate, head);
+  else if (app.planMode === 'year') renderYear(body, app.planDate, head);
+  else renderWeek(body, app.planDate, head);
 }
 const setDate = (d, mode) => { app.planDate = d; if (mode) app.planMode = mode; app.render(); };
 
@@ -46,9 +51,9 @@ function loadBar(d) {
 
 // ——— День ———
 const PX = 1.1; // пикселей в минуте
-function renderDay(root, d) {
+function renderDay(root, d, head) {
   const now = st.clock();
-  root.append(nav(fmtLong(d), () => setDate(addDays(d, -1)), () => setDate(addDays(d, 1)), async () => { const p = await pickDate({ now, value: d, allowWeek: false, allowMonth: false, allowNone: false }); if (p && p.date) setDate(p.date); }));
+  head.append(nav(fmtLong(d), () => setDate(addDays(d, -1)), () => setDate(addDays(d, 1)), async () => { const p = await pickDate({ now, value: d, allowWeek: false, allowMonth: false, allowNone: false }); if (p && p.date) setDate(p.date); }));
   const ct = churchText(d);
   if (ct) root.append(h('div.church-line', ct));
   const { el, l } = loadBar(d);
@@ -108,9 +113,15 @@ function renderDay(root, d) {
     }, 'свободно ' + fmtDur(w.min));
     tl.append(el2);
   }
+  let focusY = null;
   if (d === today(now)) {
     const m = now.getHours() * 60 + now.getMinutes();
-    if (m >= from && m <= to) tl.append(h('div.tl-now', { style: { top: (m - from) * PX + 'px' } }));
+    if (m >= from && m <= to) { tl.append(h('div.tl-now', { style: { top: (m - from) * PX + 'px' } })); focusY = (m - from) * PX; }
+  } else if (items.length) focusY = (items[0].a - from) * PX;
+  // при первом показе дня — прокрутка к «сейчас» или к первому делу
+  if (focusY != null && app._dayShown !== d) {
+    app._dayShown = d;
+    requestAnimationFrame(() => { const v = document.getElementById('view'); if (v) v.scrollTop = Math.max(0, tl.offsetTop + focusY - 200); });
   }
   root.append(tl);
   tl.dataset.from = String(from);
@@ -181,11 +192,11 @@ function dragToTimeline(e, t, tl, from) {
 }
 
 // ——— Неделя ———
-function renderWeek(root, d) {
+function renderWeek(root, d, head) {
   const ws = weekStart(d);
   const T = st.T();
   const now = st.clock();
-  root.append(nav(fmtShort(ws) + ' – ' + fmtShort(addDays(ws, 6)), () => setDate(addDays(ws, -7)), () => setDate(addDays(ws, 7)), () => setDate(T)));
+  head.append(nav(fmtShort(ws) + ' – ' + fmtShort(addDays(ws, 6)), () => setDate(addDays(ws, -7)), () => setDate(addDays(ws, 7)), () => setDate(T)));
   // жёсткие сроки — отдельная лента
   const dls = st.deadlines(45);
   if (dls.length) {
@@ -209,8 +220,8 @@ function renderWeek(root, d) {
     root.append(h('div.week-day' + (day === T ? '.today' : ''),
       h('button.wd-head', { onclick: () => setDate(day, 'day') },
         h('b', DOW_SHORT[i] + ', ' + parseYmd(day).getDate() + ' ' + MONTHS[parseYmd(day).getMonth()]),
-        f ? h('span.small', { style: { color: 'var(--gold)' } }, f.title) : cd.eveOf.length ? h('span.small.faint', 'канун праздника') : null,
         h('span.grow'), l.min ? h('span.small.muted', fmtDur(l.min)) : null),
+      f ? h('div.small', { style: { color: 'var(--gold)' } }, f.title) : cd.eveOf.length ? h('div.small.faint', 'канун: ' + cd.eveOf[0].title) : null,
       el,
       shown.map((it) => h('div.wd-item' + (it.block ? '.block' : ''), { onclick: it.t ? () => app.openTask(it.t.id) : null }, h('span.tm', it.tm), h('span', it.text))),
       items.length > shown.length ? h('div.small.muted', 'и ещё ' + (items.length - shown.length)) : null));
@@ -222,11 +233,11 @@ function renderWeek(root, d) {
 }
 
 // ——— Месяц ———
-function renderMonth(root, d) {
+function renderMonth(root, d, head) {
   const ms = monthStart(d);
   const [y, m] = ms.split('-').map(Number);
   const T = st.T();
-  root.append(nav(MONTHS_NOM[m - 1] + ' ' + y, () => setDate(addMonths(ms, -1)), () => setDate(addMonths(ms, 1)), () => setDate(T)));
+  head.append(nav(cap(MONTHS_NOM[m - 1]) + ' ' + y, () => setDate(addMonths(ms, -1)), () => setDate(addMonths(ms, 1)), () => setDate(T)));
   // фокусы месяца
   const key = ms.slice(0, 7);
   const focuses = (st.meta('focuses', {})[key] || []);
@@ -351,10 +362,10 @@ function yearBounds(d) {
   return { start, end: addDays(addMonths(start, 12), -1), key: String(y), label: ys === 9 ? y + '/' + String((y + 1) % 100).padStart(2, '0') : String(y) };
 }
 
-function renderYear(root, d) {
+function renderYear(root, d, head) {
   const T = st.T();
   const yb = yearBounds(d);
-  root.append(nav(yb.label, () => setDate(addMonths(yb.start, -12)), () => setDate(addMonths(yb.start, 12)), () => setDate(T)));
+  head.append(nav(yb.label, () => setDate(addMonths(yb.start, -12)), () => setDate(addMonths(yb.start, 12)), () => setDate(T)));
   const dirs = st.meta('directions', {})[yb.key] || [];
   root.append(sectionHead('Направления года', dirs.length < 3 ? h('button.chip.small', { onclick: () => editFocus('directions', yb.key, null) }, icon('plus', 14), 'Направление') : null));
   if (dirs.length) root.append(h('div', dirs.map((f) => focusLine('directions', yb.key, f, yb.start, yb.end))));
