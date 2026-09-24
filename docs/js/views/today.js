@@ -1,9 +1,9 @@
 // «Сегодня»: минимум на первом экране — три главных, ближайшее, одна строка «ещё N — позже».
-import { h, icon, toast, choose, sheet, pickDate, pickTime, clear } from '../ui.js';
+import { h, icon, toast, sheet, pickDate, pickTime } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
-import { fmtDay, fmtShort, addDays, diffDays, monthStart, monthEnd, weekStart, toMin, plural, MONTHS_NOM, MONTHS_PREP, daysInMonth, dow, hm } from '../dates.js';
-import { app, taskRow, emptyState, sectionHead, isHidden, personLabel, hiddenArea } from './common.js';
+import { fmtDay, fmtShort, addDays, diffDays, monthStart, monthEnd, weekStart, toMin, plural, MONTHS_NOM, daysInMonth, dow, hm } from '../dates.js';
+import { app, taskRow, emptyState, sectionHead, isHidden, hiddenArea } from './common.js';
 
 const ui = () => st.meta('ui', {});
 function dismiss(key, until) {
@@ -229,7 +229,7 @@ function nextCycle(g, date, time) {
 function sortOut(ids) {
   const T = st.T();
   const s = sheet(() => {
-    const list = ids.map((id) => S.tasks.get(id)).filter((t) => t && t.status === 'active' && t.date && t.date < T || t && t.status === 'active' && t.dateKind !== 'day' && t.date < T);
+    const list = ids.map((id) => S.tasks.get(id)).filter((t) => t && t.status === 'active' && t.date && t.date < T);
     if (!list.length) { setTimeout(() => { s.close(); dismiss('carry', T); }, 300); return emptyState('Разобрано.', null, 'check'); }
     return h('div.list', list.map((t) => h('div.card', { style: { margin: 0 } },
       h('div.t-text', isHidden(t) ? '•••' : t.text),

@@ -3,9 +3,8 @@ import { h, icon, toast, hideToast, choose, prompt, pickDate, pickTime, quickDay
 import * as st from '../store.js';
 import { S } from '../store.js';
 import { parse, dateLabel, partLabel } from '../parse.js';
-import { fmtDay, addDays } from '../dates.js';
+import { fmtDay, addDays, weekStart } from '../dates.js';
 import { describe as describeRepeat } from '../recur.js';
-import { app } from './common.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize, pickTemplate } from './pickers.js';
 import { findCode, decode } from '../share.js';
 
@@ -96,7 +95,9 @@ export function composer(mode = 'inline', opts = {}) {
     for (const q of quickDays(now).slice(0, 4)) {
       quick.push(h('button.chip.small' + (m.date === q.date && m.dateKind === 'day' ? '.on' : ''), { onclick: () => set({ date: m.date === q.date ? null : q.date, dateKind: 'day' }) }, q.label));
     }
-    quick.push(h('button.chip.small', { onclick: async () => { const p = await pickDate({ now, value: m.date }); if (p) set({ date: p.date, dateKind: p.dateKind }); } }, 'Дата…'));
+    const ws = weekStart(st.T());
+    quick.push(h('button.chip.small' + (m.date === ws && m.dateKind === 'week' ? '.on' : ''), { onclick: () => set(m.date === ws && m.dateKind === 'week' ? { date: null, dateKind: null } : { date: ws, dateKind: 'week' }) }, 'Эта неделя'));
+    quick.push(h('button.chip.small', { onclick: async () => { const p = await pickDate({ now, value: m.date }); if (p) set({ date: p.date, dateKind: p.dateKind }); } }, 'Выбрать…'));
     for (const [p, l] of Object.entries(PARTS)) quick.push(h('button.chip.small' + (m.part === p && !m.time ? '.on' : ''), { onclick: () => set({ part: m.part === p ? null : p, time: null }) }, l));
     quick.push(h('button.chip.small', { onclick: async () => { const t = await pickTime({ value: m.time, withDur: true, dur: m.dur }); if (t) set({ time: t.time, part: t.part, dur: t.dur || m.dur }); } }, 'Время…'));
     quick.push(h('button.chip.small' + (m.star ? '.on' : ''), { onclick: () => set({ star: !m.star }) }, '★ Главное'));
@@ -266,7 +267,7 @@ export async function createFromParse(m) {
   let where = m.done ? 'Записано в сделанное' : t.inbox ? 'Во «Входящие»' : t.date ? 'Добавлено: ' + dateLabel(t.date, t.dateKind, now) : 'Добавлено';
   toast(where, { action: 'Отменить', onAction: () => r.undo() });
   buzz(8);
-  return { task: t, undo: r.undo, message: where };
+  return { task: t, undo: r.undo, message: where, saved: r.saved };
 }
 
 /** Запуск цепочки из разобранной фразы. */
@@ -320,7 +321,7 @@ export async function launchFromParse(m) {
   const msg = 'Цепочка: ' + (st.isPrivate({ areaId: r.group.areaId }) ? tpl.name : r.group.title);
   toast(msg, { action: 'Отменить', onAction: () => r.undo() });
   buzz(8);
-  return { group: r.group, undo: r.undo, message: msg };
+  return { group: r.group, undo: r.undo, message: msg, saved: r.saved };
 }
 
 export { addDays };

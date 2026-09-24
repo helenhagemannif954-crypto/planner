@@ -182,7 +182,9 @@ function addOnly(voice) {
     root.append(box);
     setTimeout(() => { if (voice) c.listen(); else c.focusInput(); }, 150);
   };
-  const showAdded = (r) => {
+  const showAdded = async (r) => {
+    // «Добавлено» — только когда запись действительно легла в хранилище
+    try { await r.saved; } catch { toast('Не удалось сохранить. Попробуйте ещё раз.', { duration: 8000 }); return; }
     clear(box);
     box.append(h('div.added',
       h('div.okmark', icon('check')),

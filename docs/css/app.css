@@ -214,7 +214,7 @@ textarea.input { min-height: 5rem; resize: vertical; }
 
 /* ——— календарь и время ——— */
 .cal-nav { display: flex; align-items: center; gap: .25rem; margin: .75rem 0 .25rem; }
-.cal-nav b { flex: 1; text-align: center; text-transform: capitalize; }
+.cal-nav b { flex: 1; text-align: center; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .2rem; }
 .cal-dow { text-align: center; font-size: .75rem; color: var(--muted); padding: .2rem 0; }
 .cal-cell { aspect-ratio: 1 / .9; border-radius: .7rem; display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; position: relative; min-height: 2.5rem; }
@@ -275,7 +275,7 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .m-cell.fast { background: color-mix(in srgb, var(--surface2) 70%, var(--surface)); }
 .year-m { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: .6rem .8rem; margin: .4rem 0; }
 .year-m.cur { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); }
-.year-m h3 { text-transform: capitalize; font-size: 1rem; }
+.year-m h3 { font-size: 1rem; }
 .year-m ul { margin: .25rem 0 0; padding-left: 1.1rem; font-size: .875rem; color: var(--muted); }
 .focus { display: flex; gap: .5rem; align-items: center; padding: .55rem .75rem; background: var(--surface); border-radius: .9rem; box-shadow: var(--shadow); margin: .3rem 0; }
 .focus .grow { flex: 1; }

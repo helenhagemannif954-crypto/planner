@@ -106,7 +106,7 @@ let armed = false; // есть ли в истории наша запись дл
 let ignorePops = 0;
 export function sheet(build, opts = {}) {
   // тост с «Отменить» не прячем, а поднимаем наверх, чтобы не закрывал лист
-  if (toastEl) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + .75rem)'; toastEl.style.bottom = 'auto'; }
+  if (toastEl) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + 3.6rem)'; toastEl.style.bottom = 'auto'; }
   const overlay = h('div.overlay' + (opts.full ? '.full' : ''));
   const panel = h('div.sheet' + (opts.full ? '.full' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-label': opts.title || '' });
   const body = h('div.sheet-body');
@@ -182,7 +182,7 @@ export function toast(msg, opts = {}) {
   }
   // над полем ввода; когда открыт лист — вверху, чтобы не закрывать его кнопки
   const comp = document.querySelector('.composer:not(.hidden)');
-  if (stack.length || !comp) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + .75rem)'; toastEl.style.bottom = 'auto'; }
+  if (stack.length || !comp) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + 3.6rem)'; toastEl.style.bottom = 'auto'; }
   else { toastEl.style.top = 'auto'; toastEl.style.bottom = Math.max(16, window.innerHeight - comp.getBoundingClientRect().top + 10) + 'px'; }
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
@@ -254,7 +254,7 @@ export function pickDate(opts = {}) {
           opts.allowWeek !== false ? h('button.chip', { onclick: () => finish({ date: addDays(weekStart(t), 7), dateKind: 'week' }) }, 'След. неделя') : null),
         h('div.cal-nav',
           h('button.icon-btn', { 'aria-label': 'Предыдущий месяц', onclick: () => { view = monthStart(addDays(view, -1)); s.refresh(); } }, icon('back')),
-          h('b', MONTHS_NOM[m - 1] + ' ' + y),
+          h('b', MONTHS_NOM[m - 1][0].toUpperCase() + MONTHS_NOM[m - 1].slice(1) + ' ' + y),
           opts.allowMonth !== false ? h('button.chip.small', { onclick: () => finish({ date: view, dateKind: 'month' }) }, 'весь месяц') : null,
           h('button.icon-btn', { 'aria-label': 'Следующий месяц', onclick: () => { view = mkDate(y, m, daysInMonth(y, m)); view = addDays(view, 1); s.refresh(); } }, icon('right'))),
         h('div.cal-grid', DOW_SHORT.map((d) => h('span.cal-dow', d)), cells),

@@ -26,6 +26,7 @@ export function openSettings() {
       line('download', 'Резервная копия', st.meta('lastExport') ? fmtDay(st.meta('lastExport').slice(0, 10), st.clock()) : 'не было', () => backupSheet()),
       line('check', 'Журнал сделанного', null, () => journalSheet()),
       h('p.muted.small', { style: { marginTop: '1rem' } }, 'Данные хранятся только на этом устройстве. Никаких серверов и аккаунтов.'),
+      h('p.muted.small', st.meta('persisted') ? 'Хранилище защищено от автоматической очистки браузером.' : 'Браузер пока не подтвердил защиту хранилища от очистки — тем важнее регулярная копия. Обычно защита включается после установки на рабочий стол.'),
       h('p.faint.small', 'Версия данных: ' + db.SCHEMA),
     );
   }, { title: 'Настройки' });
@@ -258,7 +259,7 @@ export function importFlow(file) {
 // ——— журнал и поиск ———
 export function journalSheet() {
   let q = '';
-  const s = sheet(() => {
+  sheet(() => {
     const inp = h('input.input', { value: q, placeholder: 'Поиск по сделанному', 'aria-label': 'Поиск по сделанному', type: 'search' });
     inp.addEventListener('input', () => { q = inp.value; draw(); });
     const box = h('div');
@@ -283,7 +284,7 @@ export function journalSheet() {
 
 export function searchSheet() {
   let q = '';
-  const s = sheet(() => {
+  sheet(() => {
     const inp = h('input.input', { value: q, placeholder: 'Поиск по всем задачам', autofocus: true, type: 'search', 'aria-label': 'Поиск' });
     const box = h('div');
     const draw = () => {

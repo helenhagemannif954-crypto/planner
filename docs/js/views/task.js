@@ -1,11 +1,11 @@
 // Карточка задачи: необязательные поля раскрываются по требованию.
-import { h, icon, sheet, toast, choose, prompt, pickDate, pickTime, copyText, linkify, shareOut, confirmBox, clear } from '../ui.js';
+import { h, icon, sheet, toast, choose, prompt, pickDate, pickTime, copyText, linkify, shareOut, clear } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
 import { fmtDay, fmtShort, fmtDur, addDays } from '../dates.js';
 import { dateLabel, partLabel } from '../parse.js';
 import { describe as describeRepeat } from '../recur.js';
-import { app, isHidden, reveal, complete, reschedule, deadlineLabel, personLabel, hiddenArea, areaDot } from './common.js';
+import { app, isHidden, reveal, complete, reschedule, deadlineLabel, personLabel, hiddenArea } from './common.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize } from './pickers.js';
 import { buildIcs } from '../ics.js';
 import { describeOffset } from '../chain.js';

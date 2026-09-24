@@ -1,13 +1,13 @@
 // «План»: День / Неделя / Месяц / Год.
-import { h, icon, sheet, toast, choose, prompt, pickDate, clear, buzz } from '../ui.js';
+import { h, icon, sheet, toast, choose, prompt, pickDate, buzz } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
 import {
   today, addDays, weekStart, monthStart, monthEnd, dow, fmtDay, fmtLong, fmtShort, fmtDur, toMin, fromMin,
-  DOW_SHORT, MONTHS_NOM, MONTHS, daysInMonth, mkDate, addMonths, diffDays, parseYmd, plural, ymd,
+  DOW_SHORT, MONTHS_NOM, MONTHS, daysInMonth, mkDate, addMonths, parseYmd,
 } from '../dates.js';
 import { churchDay, churchYear } from '../church.js';
-import { app, taskRow, emptyState, sectionHead, isHidden, deadlineLabel, areaDot, hiddenArea } from './common.js';
+import { app, taskRow, sectionHead, isHidden, deadlineLabel } from './common.js';
 
 const cap = (x) => x[0].toUpperCase() + x.slice(1);
 const MODES = [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц'], ['year', 'Год']];
@@ -62,9 +62,8 @@ function renderDay(root, d, head) {
 
   const blocks = st.blocksOn(d);
   const all = [...S.tasks.values()].filter((t) => !t.deletedAt && t.status !== 'someday' && !t.waitFor && t.date === d && (t.dateKind === 'day' || !t.dateKind));
-  const ns = st.nextSteps();
   const timed = all.filter((t) => t.time);
-  const untimed = st.sortTasks(all.filter((t) => !t.time && t.status === 'active' && (!t.groupId || t.isAnchor || ns.get(t.groupId) === t || t.date === d)));
+  const untimed = st.sortTasks(all.filter((t) => !t.time && t.status === 'active'));
   const starts = [...blocks.map((b) => toMin(b.start)), ...timed.map((t) => toMin(t.time))];
   const ends = [...blocks.map((b) => toMin(b.end)), ...timed.map((t) => toMin(t.time) + st.taskMin(t))];
   const from = Math.min(7 * 60, ...starts.map((x) => Math.floor(x / 60) * 60));
@@ -386,7 +385,7 @@ function renderYear(root, d, head) {
     const mt = st.activeTasks().filter((t) => t.dateKind === 'month' && t.date === ms);
     const foc = st.meta('focuses', {})[key] || [];
     root.append(h('button.year-m' + (T >= ms && T <= me ? '.cur' : ''), { style: { display: 'block', width: '100%', textAlign: 'left' }, onclick: () => setDate(ms, 'month') },
-      h('h3', MONTHS_NOM[Number(ms.slice(5, 7)) - 1] + (ms.slice(0, 4) !== yb.start.slice(0, 4) || i === 0 ? ' ' + ms.slice(0, 4) : '')),
+      h('h3', cap(MONTHS_NOM[Number(ms.slice(5, 7)) - 1]) + (ms.slice(0, 4) !== yb.start.slice(0, 4) || i === 0 ? ' ' + ms.slice(0, 4) : '')),
       foc.length ? h('div.small', foc.map((f) => f.text).join(' · ')) : null,
       lines.length || dls.length || mt.length ? h('ul', lines.map((l) => h('li', l)), dls.map((t) => h('li', { style: { color: 'var(--text)' } }, '⚑ ' + fmtShort(t.deadline) + ' ' + (isHidden(t) ? '•••' : t.text))), mt.length ? h('li', 'задач на месяц: ' + mt.length) : null) : null));
   }

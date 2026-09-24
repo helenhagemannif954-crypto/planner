@@ -1,5 +1,5 @@
 // Недельный обзор — 10 минут, пошагово; можно прервать и продолжить.
-import { h, icon, sheet, toast, pickDate, clear } from '../ui.js';
+import { h, icon, sheet, toast, pickDate } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
 import { addDays, weekStart, fmtDay, fmtShort, DOW_SHORT, diffDays, fmtDur, parseYmd } from '../dates.js';

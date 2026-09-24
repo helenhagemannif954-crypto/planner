@@ -16,7 +16,6 @@ export function openMatrix(ids) {
   const pool = [...ids];
   const placed = { q1: [], q2: [], q3: [], q4: [] };
   let sel = null;
-  let drag = null;
 
   const s = sheet(() => {
     const items = pool.map((id) => S.tasks.get(id)).filter((t) => t && t.status === 'active');

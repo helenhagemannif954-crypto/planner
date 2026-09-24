@@ -138,15 +138,6 @@ export function reanchor(group, tasks, newAnchor) {
   return changed;
 }
 
-/** Порядок задач цепочки: по дате, времени и номеру шага. */
-export function chainOrder(tasks) {
-  return [...tasks].sort((a, b) => {
-    const ka = (a.date || '9999') + (a.time || (a.isAnchor ? '' : '')) + String(a.order || 0).padStart(3, '0');
-    const kb = (b.date || '9999') + (b.time || (b.isAnchor ? '' : '')) + String(b.order || 0).padStart(3, '0');
-    return (a.order || 0) - (b.order || 0) || (ka < kb ? -1 : 1);
-  });
-}
-
 /**
  * Предлагает смещения по фактическим датам: items = [{text, date, time, size, ctx, draft}],
  * anchor = {date, time} | null. Если якоря нет — от самой ранней даты.

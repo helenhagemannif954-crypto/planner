@@ -206,8 +206,12 @@ export function validateImport(text) {
   let snap;
   try { snap = migrateSnapshot(obj); } catch (e) { return { ok: false, error: 'Файл повреждён: ' + e.message }; }
   for (const k of KINDS) {
-    snap.data[k] = snap.data[k].filter((x) => x && typeof x === 'object' && typeof x.id === 'string' && x.id.length < 100);
+    snap.data[k] = snap.data[k].filter((x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.id === 'string' && x.id.length < 100);
   }
+  snap.data.tasks = snap.data.tasks.map(normalizeTask);
+  snap.data.areas = snap.data.areas.map((a) => ({ ...a, name: str(a.name, 100) || 'Без названия', synonyms: Array.isArray(a.synonyms) ? a.synonyms.filter((x) => typeof x === 'string') : [] }));
+  snap.data.people = snap.data.people.map((p) => ({ ...p, code: str(p.code, 40) || '?' }));
+  snap.data.templates = snap.data.templates.map((t) => ({ ...t, name: str(t.name, 100) || 'Шаблон', steps: Array.isArray(t.steps) ? t.steps.filter((x) => x && typeof x === 'object') : [] }));
   const t = snap.data.tasks;
   const summary = {
     exportedAt: obj.exportedAt || null,
@@ -218,6 +222,26 @@ export function validateImport(text) {
     templates: snap.data.templates.length,
   };
   return { ok: true, snapshot: snap, summary };
+}
+
+const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : v == null ? '' : String(v).slice(0, max));
+const isD = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const isT = (v) => typeof v === 'string' && /^\d{2}:\d{2}$/.test(v);
+/** Приводит задачу из файла к ожидаемым типам — повреждённое поле не должно ломать экран. */
+function normalizeTask(t) {
+  return {
+    ...t,
+    text: str(t.text, 2000),
+    date: isD(t.date) ? t.date : null,
+    dateKind: isD(t.date) ? (['day', 'week', 'month'].includes(t.dateKind) ? t.dateKind : 'day') : null,
+    time: isT(t.time) ? t.time : null,
+    deadline: isD(t.deadline) ? t.deadline : null,
+    star: isD(t.star) ? t.star : null,
+    note: str(t.note, 20000),
+    draft: str(t.draft, 20000),
+    checklist: Array.isArray(t.checklist) ? t.checklist.filter((c) => c && typeof c === 'object').map((c) => ({ ...c, text: str(c.text, 1000) })) : [],
+    status: ['active', 'done', 'someday'].includes(t.status) ? t.status : 'active',
+  };
 }
 
 export async function persistStorage() {
