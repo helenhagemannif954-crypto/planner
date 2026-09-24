@@ -138,6 +138,8 @@ function close(api, viaUser) {
   stack.splice(i, 1);
   const overlay = api.el.parentNode;
   overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.inert = true;
   setTimeout(() => overlay.remove(), reducedMotion() ? 0 : 200);
   if (viaUser && !stack.length && armed) { armed = false; ignorePops++; history.back(); }
   if (api.onClose) api.onClose();
