@@ -1,0 +1,13 @@
+{
+  "name": "planner",
+  "private": true,
+  "type": "module",
+  "description": "Личный планировщик — офлайн PWA без сервера",
+  "scripts": {
+    "test": "playwright test",
+    "serve": "http-server docs -p 8080 -c-1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}
