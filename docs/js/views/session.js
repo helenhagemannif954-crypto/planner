@@ -72,7 +72,6 @@ export function openRecordForm() {
       h('h2', 'Записано'),
       h('p', { style: { fontSize: '1.1rem', margin: 0 } }, r.client),
       h('p.muted', { style: { margin: 0 } }, sessionText(r, '', st.clock()).replace(/^сессия [^—]*— /, '')),
-      calDone ? h('div', { style: { maxWidth: '22rem', marginTop: '1rem' } }, stepsBlock()) : null,
       h('div', { style: { marginTop: '1rem', width: '100%', maxWidth: '22rem' } },
         calendarLink(sessionIcs(r, st.clock()), 'sessiya-' + r.start.date + '.ics', {
           label: calDone ? 'Скачать файл ещё раз' : 'Добавить в календарь', source: 'session',
@@ -81,7 +80,8 @@ export function openRecordForm() {
             calDone = true;
             s.refresh();
           },
-        })),
+        }),
+        stepsBlock(!!calDone)),
       h('p.muted.small.cal-hint', { style: { maxWidth: '22rem' } }, CHECK_HINT));
   }
 }

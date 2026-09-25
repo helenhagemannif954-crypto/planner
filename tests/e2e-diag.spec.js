@@ -139,9 +139,9 @@ test('одна пробная попытка: экран показывает п
   for (const t of types) expect(t).toBe('text/calendar;charset=utf-8');
   // по умолчанию — никаких программных кликов
   expect(await page.evaluate(() => window.__anchors)).toEqual([]);
-  await expect(dlg.getByText('Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите ваше приложение календаря')).toBeVisible();
+  await expect(dlg.locator('.cal-steps', { hasText: 'После скачивания внизу экрана браузера появится плашка «Открыть» — нажмите её и выберите ваше приложение календаря' })).toBeVisible();
   // без привязки к конкретному приложению календаря
-  expect(await dlg.innerText()).not.toMatch(/Яндекс/);
+  expect(await dlg.innerText()).not.toMatch(/Яндекс|шторк|Загрузк|уведомлени/);
   await expect(dlg.getByText(/выберите ваше приложение календаря/)).toBeVisible();
   await dlg.getByRole('button', { name: 'началась загрузка файла' }).click();
   await expect(pre).toContainText('На экране: началась загрузка файла');

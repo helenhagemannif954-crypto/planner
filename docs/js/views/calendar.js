@@ -11,12 +11,7 @@ import * as st from '../store.js';
 import { buildIcs, checkIcs } from '../ics.js';
 import { fmtDay } from '../dates.js';
 
-export const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите ваше приложение календаря';
-export const HINTS = {
-  shared: 'Выберите ваше приложение календаря в списке приложений.',
-  opened: 'Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите ваше приложение календаря.',
-  downloaded: STEPS,
-};
+export const STEPS = 'После скачивания внизу экрана браузера появится плашка «Открыть» — нажмите её и выберите ваше приложение календаря';
 export const CHECK_HINT = 'Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости перенесите его в общий календарь вручную в вашем приложении календаря';
 export const autoCalendar = () => st.settings().autoCalendar !== false;
 export const METHODS = {
@@ -188,9 +183,9 @@ export function calendarLink(text, name, { label = 'Добавить в кале
   }, icon('download', 20), label);
 }
 
-/** Заметный блок с шагами после скачивания. */
-export function stepsBlock() {
-  return h('div.cal-steps', { role: 'status' }, icon('check', 20), h('span', STEPS));
+/** Подсказка под кнопкой скачивания; после нажатия — та же, но заметным блоком. */
+export function stepsBlock(done = true) {
+  return done ? h('div.cal-steps', { role: 'status' }, icon('check', 20), h('span', STEPS)) : h('p.small.cal-hint', STEPS);
 }
 
 /** Файл события для задачи. Для закрытых областей в файле только «Встреча». */
@@ -212,8 +207,8 @@ export function calendarSheet(t, { kind, done = false } = {}) {
   let shown = done;
   return sheet((api) => h('div',
     h('p.muted', f.title + (t.date ? ' · ' + fmtDay(t.date, st.clock()) + (t.time ? ', ' + t.time : '') : '')),
-    shown ? stepsBlock() : null,
     calendarLink(f.text, f.name, { label: shown ? 'Скачать файл ещё раз' : 'Добавить в календарь', source: 'sheet', onDone: () => { shown = true; api.refresh(); } }),
+    stepsBlock(shown),
     h('p.muted.small.cal-hint', CHECK_HINT),
     shown ? h('button.btn.block', { onclick: () => api.close() }, 'Готово') : null,
   ), { title: 'Календарь' });

@@ -6,7 +6,7 @@ import { start, add, dump } from './helpers.js';
 const st = (page, fn, arg) => page.evaluate(`(async () => { const st = await import(location.origin + '/js/store.js'); const r = await (${fn.toString()})(st, ${JSON.stringify(arg ?? null)}); await st.flush(); return r; })()`);
 const noShare = () => { navigator.canShare = () => false; };
 
-const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите ваше приложение календаря';
+const STEPS = 'После скачивания внизу экрана браузера появится плашка «Открыть» — нажмите её и выберите ваше приложение календаря';
 
 // Шпион: программные клики по ссылкам и вызовы «Поделиться» — по умолчанию их быть не должно.
 const spy = () => {
@@ -47,7 +47,7 @@ test('после сохранения задачи со временем нич�
   const dlg = page.getByRole('dialog', { name: 'Календарь' });
   await expect(dlg.getByText(STEPS)).toBeVisible();
   await expect(dlg.getByRole('link', { name: 'Скачать файл ещё раз' })).toBeVisible();
-  expect(await dlg.innerText()).not.toMatch(/Яндекс/);
+  expect(await dlg.innerText()).not.toMatch(/Яндекс|шторк|Загрузк|уведомлени/);
   expect(await page.evaluate(() => [window.__progClicks, window.__shared])).toEqual([0, 0]);
   const last = await page.evaluate(() => JSON.parse(localStorage.getItem('planner.calendarDiag'))[0]);
   expect(last).toMatchObject({ method: 'download', blobCreated: true, clicked: true, trusted: true, blobType: 'text/calendar;charset=utf-8', ics: 'ok', source: 'toast' });
@@ -63,11 +63,17 @@ test('карточка задачи: «Добавить в календарь» 
   const link = page.getByRole('link', { name: 'Добавить в календарь' });
   await expect(link).toBeVisible();
   expect(await link.evaluate((a) => [a.href.slice(0, 5), a.getAttribute('download'), a.target])).toEqual(['blob:', 'sobytie-2026-09-25.ics', '']);
-  await expect(page.getByText(STEPS)).toHaveCount(0);
+  // подсказка видна сразу под кнопкой; инструкций про шторку и «Загрузки» нет
+  const box = page.locator('.cal-box');
+  await expect(box.locator('p.cal-hint', { hasText: STEPS })).toBeVisible();
+  await expect(box.locator('.cal-steps')).toHaveCount(0);
+  expect(await box.innerText()).not.toMatch(/шторк|Загрузк|уведомлени/);
   const [dl] = await Promise.all([page.waitForEvent('download'), link.click()]);
   expect(dl.suggestedFilename()).toBe('sobytie-2026-09-25.ics');
-  await expect(page.getByText(STEPS)).toBeVisible();
+  // после нажатия — та же подсказка, заметным блоком под кнопкой
+  await expect(box.locator('.cal-steps', { hasText: STEPS })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Скачать файл ещё раз' })).toBeVisible();
+  expect(await box.evaluate((el) => el.querySelector('.cal-link').compareDocumentPosition(el.querySelector('.cal-steps')) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
   expect(await page.evaluate(() => [window.__progClicks, window.__shared])).toEqual([0, 0]);
   await ctx.close();
 });
