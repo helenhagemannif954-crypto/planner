@@ -201,7 +201,7 @@ export function openTask(id) {
     const calBox = calFile ? h('div.cal-box',
       calShown ? stepsBlock() : null,
       calendarLink(calFile.text, calFile.name, {
-        label: calShown ? 'Скачать файл ещё раз' : 'Добавить в Яндекс.Календарь', cls: '.btn.block', source: 'task',
+        label: calShown ? 'Скачать файл ещё раз' : 'Добавить в календарь', cls: '.btn.block', source: 'task',
         onDone: () => { calShown = true; s.refresh(); },
       }),
       h('p.muted.small.cal-hint', CHECK_HINT)) : null;

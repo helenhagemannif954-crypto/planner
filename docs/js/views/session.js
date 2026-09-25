@@ -63,7 +63,7 @@ export function openRecordForm() {
     s.refresh();
   }
 
-  // После сохранения — единственное действие: в общий Яндекс.Календарь (его видят оба).
+  // После сохранения — единственное действие: в общий календарь (его видят оба).
   let calDone = null;
   function confirmView() {
     const r = saved;
@@ -75,7 +75,7 @@ export function openRecordForm() {
       calDone ? h('div', { style: { maxWidth: '22rem', marginTop: '1rem' } }, stepsBlock()) : null,
       h('div', { style: { marginTop: '1rem', width: '100%', maxWidth: '22rem' } },
         calendarLink(sessionIcs(r, st.clock()), 'sessiya-' + r.start.date + '.ics', {
-          label: calDone ? 'Скачать файл ещё раз' : 'Добавить в Яндекс.Календарь', source: 'session',
+          label: calDone ? 'Скачать файл ещё раз' : 'Добавить в календарь', source: 'session',
           onDone: () => {
             st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
             calDone = true;
@@ -210,7 +210,7 @@ export function setupScreen(obj) {
   choose(from + ' просит записывать ему сессии', [
     { label: obj.recordSessions ? 'Включить «Записать сессию»' : 'Выключить', value: true, primary: true },
     { label: 'Не сейчас', value: false },
-  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: кто клиент, начало и окончание — и одна кнопка «Добавить в Яндекс.Календарь».' }).then((v) => {
+  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: кто клиент, начало и окончание — и одна кнопка «Добавить в календарь».' }).then((v) => {
     if (!v) return;
     const contacts = [...(st.settings().contacts || [])];
     const c = st.contactByName(from);

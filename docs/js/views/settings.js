@@ -26,7 +26,7 @@ export function openSettings() {
         if (v) st.setSettings({ yearStart: v });
       }),
       h('button.line-btn', { role: 'switch', 'aria-checked': String(cfg.autoCalendar !== false), onclick: () => st.setSettings({ autoCalendar: cfg.autoCalendar === false }) },
-        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу передать событие в Яндекс.Календарь')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
+        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу предложить добавить событие в календарь')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
       line('cal', 'Диагностика календаря', diagHistory().length ? String(diagHistory().length) : null, () => calendarDiagSheet()),
       line('lock', 'PIN для закрытых областей', cfg.pinHash ? 'задан' : 'нет', () => pinSheet()),
       line('download', 'Установка на рабочий стол', null, () => installSheet()),

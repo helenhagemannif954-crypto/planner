@@ -6,7 +6,7 @@ import { start, add, dump } from './helpers.js';
 const st = (page, fn, arg) => page.evaluate(`(async () => { const st = await import(location.origin + '/js/store.js'); const r = await (${fn.toString()})(st, ${JSON.stringify(arg ?? null)}); await st.flush(); return r; })()`);
 const noShare = () => { navigator.canShare = () => false; };
 
-const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите Яндекс.Календарь';
+const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите ваше приложение календаря';
 
 // Шпион: программные клики по ссылкам и вызовы «Поделиться» — по умолчанию их быть не должно.
 const spy = () => {
@@ -44,22 +44,23 @@ test('после сохранения задачи со временем нич�
   expect(ics).toMatch(/DTSTART:20260925T060000Z/);
   expect(ics).toMatch(/DTEND:20260925T080000Z/);
   // сразу — заметный блок с шагами
-  const dlg = page.getByRole('dialog', { name: 'Яндекс.Календарь' });
+  const dlg = page.getByRole('dialog', { name: 'Календарь' });
   await expect(dlg.getByText(STEPS)).toBeVisible();
   await expect(dlg.getByRole('link', { name: 'Скачать файл ещё раз' })).toBeVisible();
+  expect(await dlg.innerText()).not.toMatch(/Яндекс/);
   expect(await page.evaluate(() => [window.__progClicks, window.__shared])).toEqual([0, 0]);
   const last = await page.evaluate(() => JSON.parse(localStorage.getItem('planner.calendarDiag'))[0]);
   expect(last).toMatchObject({ method: 'download', blobCreated: true, clicked: true, trusted: true, blobType: 'text/calendar;charset=utf-8', ics: 'ok', source: 'toast' });
   await ctx.close();
 });
 
-test('карточка задачи: «Добавить в Яндекс.Календарь» — видимая ссылка <a href="blob:…" download>, после нажатия — шаги', async ({ browser }) => {
+test('карточка задачи: «Добавить в календарь» — видимая ссылка <a href="blob:…" download>, после нажатия — шаги', async ({ browser }) => {
   const { ctx, page } = await calCtx(browser);
   await start(page);
   await add(page, 'пары в семинарии завтра');
   const id = (await dump(page)).data.tasks[0].id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  const link = page.getByRole('link', { name: 'Добавить в Яндекс.Календарь' });
+  const link = page.getByRole('link', { name: 'Добавить в календарь' });
   await expect(link).toBeVisible();
   expect(await link.evaluate((a) => [a.href.slice(0, 5), a.getAttribute('download'), a.target])).toEqual(['blob:', 'sobytie-2026-09-25.ics', '']);
   await expect(page.getByText(STEPS)).toHaveCount(0);
@@ -92,7 +93,7 @@ test('под кнопкой — напоминание проверить, чт�
   await add(page, 'пары в семинарии завтра');
   const id = (await dump(page)).data.tasks[0].id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  await expect(page.getByText('Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости переместите его в Яндекс.Календаре вручную (долгое нажатие на событие → Переместить в календарь)')).toBeVisible();
+  await expect(page.getByText('Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости перенесите его в общий календарь вручную в вашем приложении календаря')).toBeVisible();
 });
 
 test('закрытая область: в общий календарь — только «Встреча»', async ({ browser }) => {
@@ -105,7 +106,7 @@ test('закрытая область: в общий календарь — то
   expect(ics).toContain('SUMMARY:Встреча');
   expect(ics).not.toContain('Анн');
   expect(ics).not.toContain('развод');
-  await expect(page.getByRole('dialog', { name: 'Яндекс.Календарь' })).not.toContainText('Анн');
+  await expect(page.getByRole('dialog', { name: 'Календарь' })).not.toContainText('Анн');
   await ctx.close();
 });
 
@@ -129,7 +130,7 @@ test('без времени — календарь в тосте не предл
   // вручную — по-прежнему из карточки задачи
   const id = (await dump(page)).data.tasks.find((t) => t.time).id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Добавить в Яндекс.Календарь' }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Добавить в календарь' }).click()]);
   expect(readFileSync(await dl.path(), 'utf8')).toContain('SUMMARY:Встреча');
   await expect(page.getByText(STEPS)).toBeVisible();
   await ctx.close();
@@ -225,7 +226,7 @@ test('точное совпадение с существующим челове
   expect(d.data.people.find((p) => p.code === 'Ольга').counter).toBe(3);
 });
 
-test('«Записать сессию»: после сохранения единственное действие — «Добавить в Яндекс.Календарь»', async ({ browser }) => {
+test('«Записать сессию»: после сохранения единственное действие — «Добавить в календарь»', async ({ browser }) => {
   const ctx = await browser.newContext({ acceptDownloads: true });
   await ctx.addInitScript(() => { window.__shares = 0; navigator.share = async () => { window.__shares++; }; navigator.canShare = () => false; });
   const w = await ctx.newPage();
@@ -244,7 +245,7 @@ test('«Записать сессию»: после сохранения еди�
   const dlg = w.getByRole('dialog', { name: 'Записать сессию' });
   await expect(dlg.getByRole('button', { name: /Отправить/ })).toHaveCount(0);
   await expect(dlg.getByRole('button', { name: /Записать ещё/ })).toHaveCount(0);
-  const [dl] = await Promise.all([w.waitForEvent('download'), dlg.getByRole('link', { name: 'Добавить в Яндекс.Календарь' }).click()]);
+  const [dl] = await Promise.all([w.waitForEvent('download'), dlg.getByRole('link', { name: 'Добавить в календарь' }).click()]);
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('SUMMARY:Сессия · А.К.');
   expect(ics).not.toContain('Кузнецова');
@@ -265,7 +266,7 @@ test('задача на день без времени — событие на �
   await add(page, 'именины тёщи 12 октября');
   const id = (await dump(page)).data.tasks[0].id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Добавить в Яндекс.Календарь' }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Добавить в календарь' }).click()]);
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('DTSTART;VALUE=DATE:20261012');
   expect(ics).toContain('DTEND;VALUE=DATE:20261013');

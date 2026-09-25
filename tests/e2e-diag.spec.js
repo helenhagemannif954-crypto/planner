@@ -139,7 +139,10 @@ test('одна пробная попытка: экран показывает п
   for (const t of types) expect(t).toBe('text/calendar;charset=utf-8');
   // по умолчанию — никаких программных кликов
   expect(await page.evaluate(() => window.__anchors)).toEqual([]);
-  await expect(dlg.getByText('Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите Яндекс.Календарь')).toBeVisible();
+  await expect(dlg.getByText('Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите ваше приложение календаря')).toBeVisible();
+  // без привязки к конкретному приложению календаря
+  expect(await dlg.innerText()).not.toMatch(/Яндекс/);
+  await expect(dlg.getByText(/выберите ваше приложение календаря/)).toBeVisible();
   await dlg.getByRole('button', { name: 'началась загрузка файла' }).click();
   await expect(pre).toContainText('На экране: началась загрузка файла');
   expect(page.url()).toBe('http://localhost:4173/');
@@ -209,7 +212,7 @@ test('нажатие «В календарь» после сохранения �
   await start(page);
   await add(page, 'встреча завтра в 15');
   await Promise.all([page.waitForEvent('download'), page.locator('.toast').getByRole('link', { name: 'В календарь' }).click()]);
-  await page.getByRole('dialog', { name: 'Яндекс.Календарь' }).getByRole('button', { name: 'Готово' }).click();
+  await page.getByRole('dialog', { name: 'Календарь' }).getByRole('button', { name: 'Готово' }).click();
   const dlg = await openDiag(page);
   const pre = dlg.locator('pre.diag');
   await expect(pre).toContainText('Шаги: скачивание по нажатию на ссылку — без ошибки');

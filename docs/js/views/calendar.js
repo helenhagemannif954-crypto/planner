@@ -1,4 +1,4 @@
-// Один общий календарь (Яндекс) через файл .ics.
+// Один общий календарь через файл .ics; приложение календаря выбирает человек (обычно Google Календарь).
 // Основной способ — скачивание по НАСТОЯЩЕЙ видимой ссылке <a href="blob:…" download="…">,
 // которую человек нажимает сам. Программный .click() по скрытой ссылке и «Поделиться» файлом
 // по умолчанию не используются: на телефонах (Chrome на Android) первое молча блокируется,
@@ -11,13 +11,13 @@ import * as st from '../store.js';
 import { buildIcs, checkIcs } from '../ics.js';
 import { fmtDay } from '../dates.js';
 
-export const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите Яндекс.Календарь';
+export const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите ваше приложение календаря';
 export const HINTS = {
-  shared: 'Выберите Яндекс.Календарь в списке приложений.',
-  opened: 'Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь.',
+  shared: 'Выберите ваше приложение календаря в списке приложений.',
+  opened: 'Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите ваше приложение календаря.',
   downloaded: STEPS,
 };
-export const CHECK_HINT = 'Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости переместите его в Яндекс.Календаре вручную (долгое нажатие на событие → Переместить в календарь)';
+export const CHECK_HINT = 'Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости перенесите его в общий календарь вручную в вашем приложении календаря';
 export const autoCalendar = () => st.settings().autoCalendar !== false;
 export const METHODS = {
   download: 'скачивание по нажатию на ссылку',
@@ -163,7 +163,7 @@ export async function tryMethod(mode, text, name, title = 'Событие') {
  * поэтому загрузку не блокируют ни Chrome, ни Яндекс.Браузер. Нажатие записывается в историю:
  * создан ли blob, было ли нажатие настоящим (isTrusted).
  */
-export function calendarLink(text, name, { label = 'Добавить в Яндекс.Календарь', cls = '.btn.primary.block.big-action', source = '', onDone } = {}) {
+export function calendarLink(text, name, { label = 'Добавить в календарь', cls = '.btn.primary.block.big-action', source = '', onDone } = {}) {
   let url;
   const meta = fileMeta(text, name);
   try {
@@ -205,7 +205,7 @@ export function taskIcs(t, kind) {
   };
 }
 
-/** Лист «Добавить в Яндекс.Календарь»: большая ссылка, после нажатия — шаги. */
+/** Лист «Добавить в календарь»: большая ссылка, после нажатия — шаги. */
 export function calendarSheet(t, { kind, done = false } = {}) {
   const f = taskIcs(t, kind);
   if (!f) return null;
@@ -213,10 +213,10 @@ export function calendarSheet(t, { kind, done = false } = {}) {
   return sheet((api) => h('div',
     h('p.muted', f.title + (t.date ? ' · ' + fmtDay(t.date, st.clock()) + (t.time ? ', ' + t.time : '') : '')),
     shown ? stepsBlock() : null,
-    calendarLink(f.text, f.name, { label: shown ? 'Скачать файл ещё раз' : 'Добавить в Яндекс.Календарь', source: 'sheet', onDone: () => { shown = true; api.refresh(); } }),
+    calendarLink(f.text, f.name, { label: shown ? 'Скачать файл ещё раз' : 'Добавить в календарь', source: 'sheet', onDone: () => { shown = true; api.refresh(); } }),
     h('p.muted.small.cal-hint', CHECK_HINT),
     shown ? h('button.btn.block', { onclick: () => api.close() }, 'Готово') : null,
-  ), { title: 'Яндекс.Календарь' });
+  ), { title: 'Календарь' });
 }
 
 /** Пробная попытка из «Диагностики»: событие-проверка на завтра, 10:00. */
