@@ -5,7 +5,7 @@ import { S } from '../store.js';
 import { fmtDay, fmtLong, fmtShort, addDays, dow, DOW_SHORT, dateTime, hm, ymd } from '../dates.js';
 import { encodeSetup, sessionText, linkFor } from '../share.js';
 import { app, isHidden, askPin } from './common.js';
-import { downloadFile, FILE_HINT } from './calendar.js';
+import { deliverIcs, HINTS, CHECK_HINT } from './calendar.js';
 import { buildIcs } from '../ics.js';
 import { appBase } from './share.js';
 
@@ -64,7 +64,7 @@ export function openRecordForm() {
   }
 
   // После сохранения — единственное действие: в общий Яндекс.Календарь (его видят оба).
-  let calDone = false;
+  let calDone = null;
   function confirmView() {
     const r = saved;
     return h('div.added',
@@ -75,13 +75,16 @@ export function openRecordForm() {
       h('button.btn.primary', {
         style: { minHeight: '4rem', fontSize: '1.2rem', padding: '0 2rem', marginTop: '1rem' },
         onclick: () => {
-          downloadFile(sessionIcs(r, st.clock()), 'sessiya-' + r.start.date + '.ics');
-          st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
-          calDone = true;
-          s.refresh();
+          const ics = sessionIcs(r, st.clock());
+          deliverIcs(ics, 'sessiya-' + r.start.date + '.ics', 'Сессия').then((res) => {
+            if (res !== 'aborted') st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
+            calDone = res;
+            s.refresh();
+          });
         },
       }, icon('cal', 22), 'Добавить в Яндекс.Календарь'),
-      calDone ? h('p.muted.cal-hint', { style: { maxWidth: '22rem' } }, FILE_HINT) : null);
+      calDone && HINTS[calDone] ? h('p.cal-hint', { style: { maxWidth: '22rem' } }, HINTS[calDone]) : null,
+      h('p.muted.small.cal-hint', { style: { maxWidth: '22rem' } }, CHECK_HINT));
   }
 }
 
@@ -188,10 +191,10 @@ export function sessionScreen(obj) {
     s.close();
     const label = r.group ? (st.isPrivate({ areaId: r.group.areaId }) ? r.group.templateName : r.group.title) : 'Сессия';
     // и сразу — в общий календарь (для закрытой области там будет просто «Встреча»)
-    const { offerCalendar, CAL_HINT } = await import('./calendar.js');
+    const { offerCalendar } = await import('./calendar.js');
     const anchorT = (r.tasks || []).find((x) => x.isAnchor) || (r.tasks || [])[0];
     const cal = anchorT && offerCalendar(S.tasks.get(anchorT.id));
-    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : '') + (cal ? ' · ' + CAL_HINT : ''), { action: 'Отменить', onAction: () => r.undo() });
+    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : '') + (cal ? '. ' + cal : ''), { action: 'Отменить', onAction: () => r.undo(), duration: cal ? 10000 : undefined });
   }
 }
 

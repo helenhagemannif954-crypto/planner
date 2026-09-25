@@ -9,7 +9,7 @@ import { describe as describeRepeat } from '../recur.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize, pickTemplate } from './pickers.js';
 import { findCode, decode } from '../share.js';
 import { app } from './common.js';
-import { offerCalendar, CAL_HINT } from './calendar.js';
+import { offerCalendar } from './calendar.js';
 
 export function parseCtx() {
   return {
@@ -402,8 +402,8 @@ export async function createFromParse(m) {
   // сразу вслед за сохранением — системный выбор приложения для .ics (иначе браузер не разрешит)
   const cal = offerCalendar(t);
   let where = m.done ? 'Записано в сделанное' : t.inbox ? 'Во «Входящие»' : t.date ? 'Добавлено: ' + dateLabel(t.date, t.dateKind, now) : 'Добавлено';
-  if (cal) where += ' · ' + CAL_HINT;
-  toast(where, { action: 'Отменить', onAction: () => r.undo() });
+  if (cal) where += '. ' + cal;
+  toast(where, { action: 'Отменить', onAction: () => r.undo(), duration: cal ? 10000 : undefined });
   buzz(8);
   return { task: t, undo: r.undo, message: where, saved: r.saved };
 }
@@ -458,8 +458,9 @@ export async function launchFromParse(m) {
   }
   let msg = 'Цепочка: ' + (st.isPrivate({ areaId: r.group.areaId }) ? tpl.name : r.group.title);
   const anchorT = r.tasks.find((x) => x.isAnchor);
-  if (anchorT && offerCalendar(S.tasks.get(anchorT.id))) msg += ' · ' + CAL_HINT;
-  toast(msg, { action: 'Отменить', onAction: () => r.undo() });
+  const calHint = anchorT && offerCalendar(S.tasks.get(anchorT.id));
+  if (calHint) msg += '. ' + calHint;
+  toast(msg, { action: 'Отменить', onAction: () => r.undo(), duration: calHint ? 10000 : undefined });
   buzz(8);
   return { group: r.group, undo: r.undo, message: msg, saved: r.saved };
 }

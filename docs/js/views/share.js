@@ -31,7 +31,7 @@ export async function sendTask(t) {
   // у задачи с датой и временем другой путь — общий календарь (его видят оба)
   if (t.date || t.time) {
     const { sendToCalendar } = await import('./calendar.js');
-    sendToCalendar(t);
+    await sendToCalendar(t);
     return false;
   }
   const c = await pickContact('Отправить задачу');

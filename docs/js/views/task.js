@@ -8,14 +8,14 @@ import { describe as describeRepeat } from '../recur.js';
 import { app, isHidden, reveal, complete, reschedule, deadlineLabel, personLabel, hiddenArea } from './common.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize } from './pickers.js';
 import { describeOffset } from '../chain.js';
-import { calendarKind, sendToCalendar, FILE_HINT } from './calendar.js';
+import { calendarKind, sendToCalendar, HINTS, CHECK_HINT } from './calendar.js';
 
 export function openTask(id) {
   let t = S.tasks.get(id);
   if (!t) return;
   if (isHidden(t)) { reveal(t); return; }
   let showAll = false;
-  let calShown = false;
+  let calShown = null;
   let unsub = null;
   const s = sheet((api) => {
     t = S.tasks.get(id);
@@ -199,9 +199,10 @@ export function openTask(id) {
     const calKind = calendarKind(t);
     const calBox = calKind && !done ? h('div.cal-box',
       h('button.btn.block', {
-        onclick: () => { sendToCalendar(S.tasks.get(id), { kind: calKind, toastHint: false }); calShown = true; s.refresh(); },
-      }, icon('cal', 18), 'Добавить в календарь'),
-      calShown ? h('p.muted.small.cal-hint', FILE_HINT) : null) : null;
+        onclick: () => { sendToCalendar(S.tasks.get(id), { kind: calKind, toastHint: false }).then((r) => { calShown = r; s.refresh(); }); },
+      }, icon('cal', 18), 'Добавить в Яндекс.Календарь'),
+      calShown && HINTS[calShown] ? h('p.small.cal-hint', HINTS[calShown]) : null,
+      h('p.muted.small.cal-hint', CHECK_HINT)) : null;
 
     return h('div.form',
       priv ? h('div.muted.small', icon('lock', 14), ' Закрытая область: задачу нельзя отправить; в календарь уйдёт нейтральный текст «Встреча».') : null,

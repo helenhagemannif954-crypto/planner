@@ -6,36 +6,109 @@ import { start, add, dump } from './helpers.js';
 const st = (page, fn, arg) => page.evaluate(`(async () => { const st = await import(location.origin + '/js/store.js'); const r = await (${fn.toString()})(st, ${JSON.stringify(arg ?? null)}); await st.flush(); return r; })()`);
 const noShare = () => { navigator.canShare = () => false; };
 
-test('задача со временем: сразу после сохранения — .ics и подсказка «Откройте в Яндекс.Календаре»', async ({ browser }) => {
+// Шпион: скачивание через <a download> и вызовы «Поделиться».
+const spy = (shareMode) => {
+  window.__anchorDownloads = 0;
+  window.__shared = [];
+  const click = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () { if (this.hasAttribute('download')) window.__anchorDownloads++; return click.call(this); };
+  if (shareMode === 'none') { navigator.canShare = () => false; return; }
+  navigator.canShare = (d) => !!(d && d.files && d.files.length);
+  navigator.share = async (d) => {
+    const f = d.files[0];
+    window.__shared.push({ name: f.name, type: f.type, text: await f.text(), title: d.title });
+    if (shareMode === 'abort') throw new DOMException('dismissed', 'AbortError');
+    if (shareMode === 'deny') throw new DOMException('no gesture', 'NotAllowedError');
+  };
+};
+
+test('1) есть «Поделиться» с файлом: сразу системное окно, без скачивания', async ({ browser }) => {
   const ctx = await browser.newContext({ acceptDownloads: true });
-  await ctx.addInitScript(noShare);
+  await ctx.addInitScript(spy, 'ok');
   const page = await ctx.newPage();
+  let downloads = 0;
+  page.on('download', () => { downloads++; });
   await start(page);
+  await add(page, 'совет в семинарии завтра с 10 до 12');
+  await page.waitForFunction(() => window.__shared.length > 0);
+  const sh = await page.evaluate(() => window.__shared[0]);
+  expect(sh.name).toMatch(/\.ics$/);
+  expect(sh.type).toBe('text/calendar');
+  expect(sh.text).toContain('SUMMARY:Совет в семинарии');
+  expect(sh.text).toMatch(/DTSTART:20260925T060000Z/);
+  expect(sh.text).toMatch(/DTEND:20260925T080000Z/);
+  await page.waitForTimeout(500);
+  expect(downloads).toBe(0);
+  expect(await page.evaluate(() => window.__anchorDownloads)).toBe(0);
+  await ctx.close();
+});
+
+test('2) «Поделиться» файлом нельзя: файл открывается во вкладке (blob без download), приложение остаётся', async ({ browser }) => {
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  await ctx.addInitScript(spy, 'none');
+  const page = await ctx.newPage();
+  const logs = [];
+  page.on('console', (m) => logs.push(m.text()));
+  await start(page);
+  // Chromium не показывает text/calendar во вкладке и сам превращает это в загрузку — ловим её
   const [dl] = await Promise.all([page.waitForEvent('download'), add(page, 'забрать детей из школы завтра в 13:30')]);
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('SUMMARY:Забрать детей из школы');
   expect(ics).toMatch(/DTSTART:20260925T093000Z/);
-  await expect(page.locator('.toast')).toContainText('файл для Яндекс.Календаря');
+  expect(await page.evaluate(() => window.__anchorDownloads)).toBe(0);
+  expect(logs.some((l) => l.includes('[календарь] файл открыт во вкладке (blob, без download)'))).toBe(true);
+  expect(page.url()).toBe('http://localhost:4173/');
+  await expect(page.locator('#view')).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь.');
   await ctx.close();
 });
 
-test('«Поделиться» для .ics не используется даже там, где он есть: только скачивание, без посторонних меню', async ({ browser }) => {
+test('«Поделиться» упало с ошибкой — тоже открываем во вкладке; закрыли окно сами — больше ничего не открываем', async ({ browser }) => {
+  for (const [mode, expectDl] of [['deny', true], ['abort', false]]) {
+    const ctx = await browser.newContext({ acceptDownloads: true });
+    await ctx.addInitScript(spy, mode);
+    const page = await ctx.newPage();
+    let downloads = 0;
+    page.on('download', () => { downloads++; });
+    await start(page);
+    await add(page, 'встреча завтра в 15');
+    await page.waitForFunction(() => window.__shared.length > 0);
+    await page.waitForTimeout(800);
+    expect(downloads > 0, mode).toBe(expectDl);
+    expect(await page.evaluate(() => window.__anchorDownloads), mode).toBe(0);
+    await ctx.close();
+  }
+});
+
+test('3) резерв «Скачивать файл» из настроек: обычная загрузка и точная подсказка', async ({ browser }) => {
   const ctx = await browser.newContext({ acceptDownloads: true });
-  await ctx.addInitScript(() => {
-    window.__shares = 0;
-    navigator.canShare = () => true;
-    navigator.share = async () => { window.__shares++; };
-  });
+  await ctx.addInitScript(spy, 'ok');
   const page = await ctx.newPage();
   await start(page);
-  const [dl] = await Promise.all([page.waitForEvent('download'), add(page, 'совет в семинарии завтра с 10 до 12')]);
-  const ics = readFileSync(await dl.path(), 'utf8');
-  expect(dl.suggestedFilename()).toMatch(/\.ics$/);
-  expect(ics).toContain('SUMMARY:Совет в семинарии');
-  expect(ics).toMatch(/DTSTART:20260925T060000Z/);
-  expect(ics).toMatch(/DTEND:20260925T080000Z/);
-  expect(await page.evaluate(() => window.__shares)).toBe(0);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Настройки' }).click();
+  await page.getByRole('button', { name: /Как передавать в календарь/ }).click();
+  await page.getByRole('button', { name: /Скачивать файл/ }).click();
+  await page.keyboard.press('Escape');
+  await add(page, 'пары в семинарии завтра');
+  const id = (await dump(page)).data.tasks[0].id;
+  await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в Яндекс.Календарь' }).click()]);
+  expect(dl.suggestedFilename()).toBe('sobytie-2026-09-25.ics');
+  const hint = page.getByText('Файл скачан в Загрузки. Откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь');
+  await expect(hint).toBeVisible();
+  expect(await hint.innerText()).not.toMatch(/сейчас/i);
+  expect(await page.evaluate(() => window.__shared.length)).toBe(0);
+  expect(await page.evaluate(() => window.__anchorDownloads)).toBe(1);
   await ctx.close();
+});
+
+test('под кнопкой — напоминание проверить, что событие в общем, а не в личном календаре', async ({ page }) => {
+  await start(page);
+  await add(page, 'пары в семинарии завтра');
+  const id = (await dump(page)).data.tasks[0].id;
+  await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
+  await expect(page.getByText('Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости переместите его в Яндекс.Календаре вручную (долгое нажатие на событие → Переместить в календарь)')).toBeVisible();
 });
 
 test('закрытая область: в общий календарь — только «Встреча»', async ({ browser }) => {
@@ -72,9 +145,9 @@ test('без времени — календарь не предлагается
   // вручную — по-прежнему из карточки задачи
   const id = (await dump(page)).data.tasks.find((t) => t.time).id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в календарь' }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в Яндекс.Календарь' }).click()]);
   expect(readFileSync(await dl.path(), 'utf8')).toContain('SUMMARY:Встреча');
-  await expect(page.getByText('Файл сохранён — откройте его из уведомлений или папки Загрузки и выберите Яндекс.Календарь')).toBeVisible();
+  await expect(page.getByText('Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь.')).toBeVisible();
   await ctx.close();
 });
 
@@ -170,7 +243,7 @@ test('точное совпадение с существующим челове
 
 test('«Записать сессию»: после сохранения единственное действие — «Добавить в Яндекс.Календарь»', async ({ browser }) => {
   const ctx = await browser.newContext({ acceptDownloads: true });
-  await ctx.addInitScript(() => { window.__shares = 0; navigator.share = async () => { window.__shares++; }; navigator.canShare = () => true; });
+  await ctx.addInitScript(() => { window.__shares = 0; navigator.share = async () => { window.__shares++; }; navigator.canShare = () => false; });
   const w = await ctx.newPage();
   await start(w, { name: 'Мария' });
   await st(w, (st) => st.setSettings({ contacts: [{ id: 'c', name: 'Иоанн', areaId: null, iRecord: true }] }));
@@ -193,7 +266,8 @@ test('«Записать сессию»: после сохранения еди�
   expect(ics).not.toContain('Кузнецова');
   expect(ics).toMatch(/DTSTART:20260927T070000Z/);
   expect(ics).toMatch(/DTEND:20260927T080000Z/);
-  await expect(dlg.getByText('Файл сохранён — откройте его из уведомлений или папки Загрузки и выберите Яндекс.Календарь')).toBeVisible();
+  await expect(dlg.getByText('Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь.')).toBeVisible();
+  await expect(dlg.getByText(/проверьте, что событие создано в общем календаре, а не в личном/)).toBeVisible();
   expect(await w.evaluate(() => window.__shares)).toBe(0);
   await ctx.close();
 });
@@ -207,7 +281,7 @@ test('задача на день без времени — событие на �
   await add(page, 'именины тёщи 12 октября');
   const id = (await dump(page)).data.tasks[0].id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в календарь' }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в Яндекс.Календарь' }).click()]);
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('DTSTART;VALUE=DATE:20261012');
   expect(ics).toContain('DTEND;VALUE=DATE:20261013');

@@ -7,6 +7,7 @@ import { fmtDay, DOW_SHORT, DOW_FULL, ymd, fmtShort } from '../dates.js';
 import { app, taskRow, emptyState, sectionHead, hiddenArea, unlockArea } from './common.js';
 import { describeBlock } from '../blocks.js';
 import { install, checkInstall, standalone, browserName } from '../install.js';
+import { calLog } from './calendar.js';
 
 export function openSettings() {
   const s = sheet(() => {
@@ -25,7 +26,15 @@ export function openSettings() {
         if (v) st.setSettings({ yearStart: v });
       }),
       h('button.line-btn', { role: 'switch', 'aria-checked': String(cfg.autoCalendar !== false), onclick: () => st.setSettings({ autoCalendar: cfg.autoCalendar === false }) },
-        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу файл .ics для Яндекс.Календаря')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
+        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу передать событие в Яндекс.Календарь')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
+      line('cal', 'Как передавать в календарь', cfg.calendarMode === 'download' ? 'скачивать файл' : 'сразу открыть', async () => {
+        const v = await choose('Как передавать в календарь', [
+          { label: 'Сразу открыть', hint: 'рекомендуется', value: 'auto', primary: cfg.calendarMode !== 'download' },
+          { label: 'Скачивать файл', value: 'download', primary: cfg.calendarMode === 'download' },
+        ], { text: '«Сразу открыть»: окно «Отправить в…» с Яндекс.Календарём, а если браузер так не умеет — файл открывается во вкладке. «Скачивать файл» — запасной способ, если на вашем телефоне первый не работает: файл ляжет в Загрузки, откуда его открывают вручную.'
+          + (calLog.length ? ' Последняя попытка: ' + calLog[calLog.length - 1].msg + '.' : '') });
+        if (v) st.setSettings({ calendarMode: v });
+      }),
       line('lock', 'PIN для закрытых областей', cfg.pinHash ? 'задан' : 'нет', () => pinSheet()),
       line('download', 'Установка на рабочий стол', null, () => installSheet()),
       line('download', 'Резервная копия', st.meta('lastExport') ? fmtDay(st.meta('lastExport').slice(0, 10), st.clock()) : 'не было', () => backupSheet()),
