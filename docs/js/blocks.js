@@ -1,4 +1,4 @@
-// Постоянные блоки недели. Блок: {dow, start, endDow?, end?}. Окончание необязательно и может
+// Постоянные блоки недели. Блок: {dow, start, end?, endDays? | endDow?}. Окончание необязательно и может
 // приходиться на другой день («пн 16:00 → вт 16:00»). Без окончания — длительность по умолчанию.
 export const DAY = 1440;
 export const WEEK = 7 * DAY;
@@ -10,7 +10,12 @@ export const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + S
 export function blockRange(b, defaultDur = 60) {
   const s = (Number(b.dow) - 1) * DAY + toM(b.start);
   let e;
-  if (b.end) {
+  if (b.end && b.endDays != null) {
+    // окончание через N дней после дня начала (0 — в тот же день)
+    e = (Number(b.dow) - 1 + Number(b.endDays)) * DAY + toM(b.end);
+    if (e <= s) e += DAY;
+    e = Math.min(e, s + WEEK);
+  } else if (b.end) {
     const endDow = Number(b.endDow || b.dow);
     e = (endDow - 1) * DAY + toM(b.end);
     if (e <= s) e += b.endDow && Number(b.endDow) !== Number(b.dow) ? WEEK : DAY;

@@ -86,7 +86,7 @@ main#view { flex: 1; overflow-y: auto; overflow-x: hidden; padding: .25rem 1rem 
 .round { width: var(--tap); height: var(--tap); border-radius: 50%; display: grid; place-items: center; flex: none; }
 .round.accent { background: var(--accent); color: var(--accent-ink); }
 .round.soft { background: var(--surface2); color: var(--text); }
-.round.listening { background: var(--gold); color: #fff; animation: pulse 1.2s infinite; }
+.round.listening { background: var(--gold); color: #fff; }
 @keyframes pulse { 50% { transform: scale(1.08); } }
 .comp-extra { padding: .25rem 0 .5rem; display: flex; flex-direction: column; gap: .4rem; }
 .comp-hint { font-size: .8125rem; color: var(--muted); padding: 0 .25rem; }
@@ -330,3 +330,6 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .hide-btn { align-self: center; margin-left: .25rem; }
 .tl-item { z-index: 2; }
 .tl-free { z-index: 1; }
+.stop-btn { display: flex; align-items: center; gap: .75rem; width: 100%; min-height: 3.5rem; padding: .5rem 1.1rem; border-radius: var(--radius); background: var(--gold); color: #fff; font-size: 1.05rem; }
+.stop-btn b { margin-left: auto; font-size: 1.15rem; padding: .35rem 1rem; border-radius: 1.2rem; background: rgba(255, 255, 255, .22); }
+.stop-btn .rec-dot { width: .8rem; height: .8rem; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }

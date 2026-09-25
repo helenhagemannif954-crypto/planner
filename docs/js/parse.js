@@ -2,7 +2,7 @@
 // Чистый модуль без обращения к DOM: parse(text, ctx) → {text, date, time, …, chips}.
 import {
   today, addDays, addMonths, dow, weekStart, monthStart, monthEnd, mkDate, isValidDate,
-  hm, fromMin, toMin, fmtDay, fmtShort, MONTHS_NOM, plural, daysInMonth,
+  hm, fromMin, toMin, fmtDay, fmtShort, MONTHS_NOM, plural, daysInMonth, dateTime, diffDays,
 } from './dates.js';
 import { firstOccurrence, describe as describeRepeat } from './recur.js';
 
@@ -94,6 +94,88 @@ export function codeDisplay(letters) {
   return String(letters).trim();
 }
 
+// ——— чтение времени и дня с начала строки (для начала и окончания) ———
+const TIME_READERS = [
+  [/^(\d{1,2}):(\d{2})/u, (m) => ({ min: +m[1] * 60 + +m[2], bare: false })],
+  [/^(\d{1,2})\.(\d{2})(?![.\d])/u, (m) => (+m[2] > 12 || +m[2] === 0 ? { min: +m[1] * 60 + +m[2], bare: false } : null)],
+  [/^полдень/u, () => ({ min: 720 })],
+  [/^полночь/u, () => ({ min: 0 })],
+  [/^обед\p{L}*/u, () => ({ min: 780 })],
+  [new RegExp('^(?:пол-?\\s?|половин[еау]\\s+)(' + ORDW + ')', 'u'), (m) => ({ min: ((wordNum(m[1]) - 1) || 12) * 60 + 30, bare: true })],
+  [new RegExp('^четверть\\s+(' + ORDW + ')', 'u'), (m) => ({ min: ((wordNum(m[1]) - 1) || 12) * 60 + 15, bare: true })],
+  [new RegExp('^без\\s+четверти\\s+(' + NUMW + '|час)', 'u'), (m) => ({ min: ((wordNum(m[1]) - 1) || 12) * 60 + 45, bare: true })],
+  [new RegExp('^(' + NUMW + '|час)(?:\\s+(час(?:а|ов)?))?(?:\\s+(' + NUMW + ')(?:\\s+минут\\p{L}*)?(?=$|[\\s,.;!?]))?', 'u'), (m) => {
+    const h0 = wordNum(m[1]);
+    const mins = m[3] ? wordNum(m[3]) : 0;
+    if (h0 == null || h0 > 24 || mins == null || mins > 59) return null;
+    if (m[3] && mins < 10 && !/^\d/.test(m[3])) return null;
+    return { min: (h0 % 24) * 60 + mins, bare: !m[2] && !m[3] };
+  }],
+];
+function readTime(s) {
+  for (const [re, fn] of TIME_READERS) {
+    const m = s.match(re);
+    if (!m) continue;
+    const after = s.slice(m[0].length);
+    if (/^[\p{L}\d]/u.test(after)) continue; // «в 3 магазина» — не время, «15.10» — дата
+    const v = fn(m);
+    if (!v) continue;
+    let len = m[0].length;
+    const q = after.match(/^\s+(утра|дня|вечера|ночи)(?![\p{L}\d])/u);
+    if (q) len += q[0].length;
+    return { ...v, len, qual: q ? q[1] : null };
+  }
+  return null;
+}
+const DAY_READERS = [
+  [/^(сегодня|завтра|послезавтра)(?![\p{L}\d])/u, (m) => ({ rel: { сегодня: 0, завтра: 1, послезавтра: 2 }[m[1]] })],
+  [new RegExp('^(?:(следующ\\p{L}*)\\s+)?' + DOW_RE + '(?![\\p{L}\\d])', 'u'), (m) => (dowOf(m[2]) ? { dow: dowOf(m[2]), next: !!m[1] } : null)],
+  [/^(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?(?![\p{L}\d])/u, (m) => (+m[2] >= 1 && +m[2] <= 12 ? { d: +m[1], m: +m[2], y: m[3] ? +m[3] : null } : null)],
+  [new RegExp('^(\\d{1,2}|' + ORDW + ')(?:-?го)?\\s+' + MONTH_GEN + '(?![\\p{L}\\d])', 'u'), (m) => ({ d: wordNum(m[1]), m: monthOf(m[2]), y: null })],
+];
+function readDay(s) {
+  for (const [re, fn] of DAY_READERS) {
+    const m = s.match(re);
+    if (!m) continue;
+    const v = fn(m);
+    if (v) return { ...v, len: m[0].length };
+  }
+  return null;
+}
+/** «четверга 16:00», «16:00 в пятницу», «трёх», «завтра» — день и/или время. */
+function readDayTime(s) {
+  const d = readDay(s);
+  if (d) {
+    const rest = s.slice(d.len);
+    const sp = rest.match(/^\s*(?:,\s*)?(?:в|к|около)?\s*/u);
+    const t = readTime(rest.slice(sp[0].length));
+    if (t) return { day: d, time: t.min, bare: t.bare, qual: t.qual, len: d.len + sp[0].length + t.len };
+    return { day: d, time: null, len: d.len };
+  }
+  const t = readTime(s);
+  if (!t) return null;
+  const rest = s.slice(t.len);
+  const sp = rest.match(/^\s+(?:в|во)?\s*/u);
+  const d2 = sp ? readDay(rest.slice(sp[0].length)) : null;
+  if (d2) return { day: d2, dayAfter: true, time: t.min, bare: t.bare, qual: t.qual, len: t.len + sp[0].length + d2.len };
+  return { time: t.min, bare: t.bare, qual: t.qual, len: t.len };
+}
+/** День из «сегодня / четверг / 15.10» — ближайший не раньше base. */
+function resolveDay(d, T, base) {
+  if (d.rel != null) return addDays(T, d.rel);
+  if (d.dow) {
+    let x = addDays(weekStart(base), d.dow - 1);
+    if (x < base) x = addDays(x, 7);
+    if (d.next && x < addDays(weekStart(T), 7)) x = addDays(x, 7);
+    return x;
+  }
+  let y = d.y ? (d.y < 100 ? 2000 + d.y : d.y) : +base.slice(0, 4);
+  if (!isValidDate(y, d.m, d.d)) return null;
+  let x = mkDate(y, d.m, d.d);
+  if (!d.y && x < base) x = mkDate(y + 1, d.m, d.d);
+  return x;
+}
+
 // ——— основная функция ———
 export function parse(input, ctx = {}) {
   const now = ctx.now || new Date();
@@ -101,7 +183,8 @@ export function parse(input, ctx = {}) {
   const orig = String(input || '').slice(0, 2000);
   const st = { orig, low: orig.toLowerCase().replace(/ё/g, 'е') };
   const r = {
-    text: '', date: null, dateKind: null, time: null, part: null, dur: null, deadline: null,
+    text: '', date: null, dateKind: null, time: null, part: null, dur: null, deadline: null, deadlineTime: null,
+    endDate: null, endTime: null, block: null,
     size: null, repeat: null, star: false, areaId: null, ctx: null, templateId: null,
     personId: null, personCode: null, newPerson: null, chips: [], recognized: false, done: false,
   };
@@ -166,6 +249,12 @@ export function parse(input, ctx = {}) {
   first('(^|\\s)(!+)(?=\\s|$)|(!+)$', () => { r.star = true; });
   first(B + '(важно|важное|главное)' + E + '[!]*', () => { r.star = true; });
 
+  // служебные обращения к приложению: «запиши», «добавь», «напомни мне»
+  first('^\\s*(?:запиши|запомни|добавь|поставь|внеси|отметь|создай|напомни(?:\\s+мне)?)(?:\\s+(?:задачу|дело|себе|напоминание))?' + E + '\\s*[:,\\-—]?', () => {});
+  // «постоянный блок», «в постоянные» — явно блок недели
+  let wantBlock = false;
+  first(B + '(?:(?:запиши|добавь|внеси|поставь)\\s+)?(?:в|как)\\s+постоянн\\p{L}*(?:\\s+блок\\p{L}*)?|постоянн\\p{L}*\\s+блок\\p{L}*' + E, () => { wantBlock = true; });
+
   // 4. повторы
   first(B + 'через\\s+(' + NUMW + '|\\d+)\\s+(дн\\p{L}*|день)\\s+после\\s+выполнени\\p{L}*' + E, (m) => {
     r.repeat = { kind: 'after', n: wordNum(m[1]) };
@@ -188,6 +277,9 @@ export function parse(input, ctx = {}) {
     r.repeat = { kind: 'weekly', days };
   });
   if (!r.repeat) first(B + '(еженедельно|каждую\\s+неделю|раз\\s+в\\s+неделю)' + E, () => { r.repeat = { kind: 'weekly', days: [] }; });
+  // разговорная регулярность без подробностей: «повторяющееся», «регулярно», «это у меня всегда так»
+  first(B + '(?:(?:запиши|добавь|внеси|поставь|сохрани)\\s+)?(?:это\\s+)?(?:(?:в|как)\\s+)?(?:повторяющ\\p{L}*|регулярн\\p{L}*|(?:это\\s+)?(?:у\\s+меня\\s+)?всегда\\s+так|как\\s+всегда|постоянно|из\\s+недели\\s+в\\s+неделю)' + E, () => { if (!r.repeat) r.repeat = { kind: 'weekly', days: [] }; });
+  if (!r.repeat && wantBlock) r.repeat = { kind: 'weekly', days: [] };
   if (!r.repeat) first(B + '(ежемесячно|каждый\\s+месяц|каждого\\s+месяца|раз\\s+в\\s+месяц)' + E, () => { r.repeat = { kind: 'monthly', day: null }; });
   if (!r.repeat) first(B + '(ежегодно|каждый\\s+год|раз\\s+в\\s+год)' + E, () => { r.repeat = { kind: 'yearly' }; });
   if (r.repeat && r.repeat.kind === 'monthly') {
@@ -211,6 +303,48 @@ export function parse(input, ctx = {}) {
     r.dateKind = 'day';
     r.time = fromMin(Math.min(rounded, 23 * 60 + 55));
   });
+
+  // 5а. начало и окончание: «с 16:00 до четверга 16:00», «с трёх до пяти», «закончится в 12»,
+  // «освобожусь к обеду», «до 20:00». Каждая часть ищется отдельно и в любом месте фразы.
+  let startMark = false; // начало задано маркером «с/от/начало в»
+  const endRaw = { day: null, time: null, bare: false, qual: null };
+  const startRaw = { day: null, time: null, bare: false, qual: null };
+  const scan = (markerSrc, fn) => {
+    const re = rx(B + '(?:' + markerSrc + ')\\s+', 'iug');
+    let m;
+    while ((m = re.exec(st.low))) {
+      const at = m.index + m[0].length;
+      const got = readDayTime(st.low.slice(at), T);
+      if (got && fn(got, m) !== false) { mask(m.index, at + got.len); return true; }
+    }
+    return false;
+  };
+  // явное начало
+  scan('с|со|от|начало\\s+в|начало|начинается\\s+в|начнется\\s+в|начнем\\s+в|начну\\s+в|начинаю\\s+в|стартую\\s+в|старт\\s+в', (g) => {
+    if (g.time == null && !g.day) return false;
+    Object.assign(startRaw, g); startMark = true;
+  });
+  // явное окончание словами
+  scan('(?:закончится|заканчивается|закончу|закончим|заканчиваю|окончание|конец|освобожусь|освобождаюсь|буду\\s+свободен)(?:\\s+(?:в|к|около))?', (g) => {
+    if (g.time == null && !g.day) return false;
+    Object.assign(endRaw, g);
+  });
+  // «до/по …»: окончание, если есть начало или указано время; иначе это срок (ниже)
+  scan('до|по', (g, m) => {
+    if (endRaw.time != null || endRaw.day) return false;
+    const hasStart = startMark || startRaw.time != null;
+    if (m[0].trim() === 'по' && !startMark) return false;
+    if (g.time == null && !hasStart) return false; // «до пятницы» без начала — срок
+    if (g.time == null && g.day && !startMark) return false;
+    Object.assign(endRaw, g);
+  });
+  if (startRaw.day) r.date = resolveDay(startRaw.day, T, T);
+  if (startRaw.time != null) {
+    let a = startRaw.time;
+    const q = startRaw.qual || endRaw.qual;
+    a = adjHour(Math.floor(a / 60), q, startRaw.bare && !q) * 60 + (a % 60);
+    r.time = fromMin(a);
+  }
 
   // 6. даты и сроки
   const PRE = '(?:(в|во|на|до|к|ко|срок(?:ом)?|дедлайн|не\\s+позднее|к\\s+концу)\\s+)?';
@@ -361,8 +495,11 @@ export function parse(input, ctx = {}) {
     if (!hasWord && !m[3] && !qual) {
       // голое «в 18»: принимаем только перед концом фразы или служебным словом
       const rest = st.low.slice(m.index + m[0].length);
-      if (!/^\s*($|[,.;!?)]|(в|во|на|до|с|и|к|утром|вечером|днем|сегодня|завтра|послезавтра|#)(?![\p{L}\d]))/u.test(rest)) return false;
       if (!/^\d/.test(m[1])) return false;
+      const service = /^\s*($|[,.;!?)]|(в|во|на|до|с|и|к|утром|вечером|днем|сегодня|завтра|послезавтра|#)(?![\p{L}\d]))/u.test(rest);
+      // час дня (7–23) перед обычным словом — тоже время, кроме счётных слов («в 10 раз»)
+      const counted = /^\s*(раз|штук|экземпляр|человек|магазин|мест|пункт|страниц|рубл|процент|класс|кабинет|аудитори|групп|дом|квартир|этаж)/u.test(rest);
+      if (!service && (h0 < 7 || counted)) return false;
     }
     return setTime(adjHour(h0, qual, !qual), mins);
   });
@@ -460,6 +597,15 @@ export function parse(input, ctx = {}) {
     }
   }
 
+  // «с 15:00 до 17:00 завтра»: день после времени окончания — день всего диапазона,
+  // если у начала своего дня нет и этот день не противоречит времени («до 16:00 четверга» при начале в 16:00 — другой день)
+  if (endRaw.day && endRaw.dayAfter && !startRaw.day && !r.date && r.time && endRaw.time != null) {
+    const s0 = toMin(r.time);
+    let e = adjHour(Math.floor(endRaw.time / 60), endRaw.qual, false) * 60 + (endRaw.time % 60);
+    if (endRaw.bare && !endRaw.qual && e <= s0 && e + 720 > s0 && e < 720) e += 720;
+    if (e > s0) { r.date = resolveDay(endRaw.day, T, T); r.dateKind = 'day'; endRaw.day = null; }
+  }
+
   // ——— итоги ———
   if (r.repeat) {
     if (r.repeat.kind === 'weekly' && !r.repeat.days.length) r.repeat.days = [dow(r.date || T)];
@@ -470,10 +616,41 @@ export function parse(input, ctx = {}) {
   if ((r.time || r.part) && !r.date) {
     r.date = T;
     r.dateKind = 'day';
-    if (r.time && !ctx.keepPast && toMin(r.time) < now.getHours() * 60 + now.getMinutes() - 60) r.date = addDays(T, 1);
+    if (r.time && !ctx.keepPast && toMin(r.time) < now.getHours() * 60 + now.getMinutes() - 15) r.date = addDays(T, 1);
   }
   if (r.star && !r.date) { r.date = T; r.dateKind = 'day'; }
   if (r.time) r.part = null;
+
+  // окончание
+  if (endRaw.time != null || endRaw.day) {
+    if (r.time) {
+      const s0 = toMin(r.time);
+      let e = endRaw.time;
+      if (e == null) e = s0;
+      else {
+        e = adjHour(Math.floor(e / 60), endRaw.qual, false) * 60 + (e % 60);
+        // «с 9 до 1» — до 13:00; голое время окончания раньше начала — после полудня
+        if (endRaw.bare && !endRaw.qual && e <= s0 && e + 720 > s0 && e < 720) e += 720;
+      }
+      let ed = endRaw.day ? resolveDay(endRaw.day, r.date || T, r.date || T) : r.date;
+      if (ed === r.date && e <= s0) ed = endRaw.day && endRaw.day.dow ? addDays(ed, 7) : addDays(ed, 1);
+      r.endDate = ed;
+      r.endTime = fromMin(e);
+      r.dur = Math.round((dateTime(ed, r.endTime) - dateTime(r.date, r.time)) / 60000);
+    } else {
+      // окончание без начала — это срок («сдать до 18:00», «до пятницы 12:00»)
+      const ed = endRaw.day ? resolveDay(endRaw.day, T, T) : (r.date || T);
+      r.deadline = r.deadline || ed;
+      if (endRaw.time != null) r.deadlineTime = fromMin(adjHour(Math.floor(endRaw.time / 60), endRaw.qual, false) * 60 + (endRaw.time % 60));
+    }
+  }
+  if (r.dur && !r.size) r.size = r.dur <= 15 ? 'S' : r.dur <= 60 ? 'M' : 'L';
+
+  // повтор по неделе + время начала и окончания → постоянный блок недели
+  if (r.repeat && (r.repeat.kind === 'weekly' || r.repeat.kind === 'daily') && r.time && (r.endTime || wantBlock)) {
+    const days = r.repeat.kind === 'daily' ? [1, 2, 3, 4, 5, 6, 7] : r.repeat.days && r.repeat.days.length ? r.repeat.days : [dow(r.date || T)];
+    r.block = { days, start: r.time, end: r.endTime || null, endDays: r.endDate ? Math.max(0, diffDays(r.date, r.endDate)) : 0 };
+  }
 
   r.text = cleanup(st.orig);
   r.recognized = !!(r.date || r.deadline || r.areaId || r.templateId || r.repeat || r.personId);
@@ -499,6 +676,8 @@ function cleanup(s) {
     s = s.replace(/^[,.;:\-—–\s]+|[,;:\-—–\s]+$/gu, '').trim();
   }
   s = s.replace(/\s+([,.;:!?])/g, '$1').replace(/\s{2,}/g, ' ');
+  // от вычтенных кусков остаются знаки подряд: «семинарии. .» → «семинарии»
+  s = s.replace(/([,.;:])(?:\s*[,.;:])+/g, '$1').replace(/[\s,.;:\-—–]+$/u, '').replace(/^[\s,.;:\-—–]+/u, '').trim();
   if (s) s = s[0].toUpperCase() + s.slice(1);
   return s;
 }
@@ -521,6 +700,13 @@ export function dateLabel(date, kind, now = new Date()) {
   return fmtDay(date, now);
 }
 
+/** «до 17:00», «до чт 16:00». */
+export function endLabel(r, now = new Date()) {
+  if (!r.endTime) return '';
+  const other = r.endDate && r.endDate !== r.date;
+  return 'до ' + (other ? dateLabel(r.endDate, 'day', now) + ' ' : '') + r.endTime;
+}
+
 function chipsOf(r, ctx, now) {
   const c = [];
   if (r.done) c.push({ key: 'done', label: 'уже сделано' });
@@ -531,10 +717,12 @@ function chipsOf(r, ctx, now) {
   if (r.personId) c.push({ key: 'person', label: r.personCode, person: true });
   if (r.newPerson) c.push({ key: 'person', label: r.newPerson + ' (новый)', person: true });
   if (r.date) c.push({ key: 'date', label: dateLabel(r.date, r.dateKind, now) });
-  if (r.time) c.push({ key: 'time', label: r.time + (r.dur ? ' · ' + (r.dur >= 60 ? (r.dur / 60) + ' ч' : r.dur + ' мин') : '') });
+  if (r.time) c.push({ key: 'time', label: (r.endTime ? 'с ' : '') + r.time + (!r.endTime && r.dur ? ' · ' + (r.dur >= 60 ? (r.dur / 60) + ' ч' : r.dur + ' мин') : '') });
   else if (r.part) c.push({ key: 'time', label: partLabel(r.part) });
-  if (r.deadline) c.push({ key: 'deadline', label: 'срок ' + fmtDay(r.deadline, now) });
-  if (r.repeat) c.push({ key: 'repeat', label: describeRepeat(r.repeat) });
+  if (r.endTime) c.push({ key: 'end', label: endLabel(r, now) });
+  if (r.deadline) c.push({ key: 'deadline', label: 'срок ' + fmtDay(r.deadline, now) + (r.deadlineTime ? ' до ' + r.deadlineTime : '') });
+  if (r.block) c.push({ key: 'block', label: 'постоянный блок' });
+  else if (r.repeat) c.push({ key: 'repeat', label: describeRepeat(r.repeat) });
   if (r.star) c.push({ key: 'star', label: '★ главное' });
   if (r.areaId) {
     const a = (ctx.areas || []).find((x) => x.id === r.areaId);

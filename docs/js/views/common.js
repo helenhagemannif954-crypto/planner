@@ -110,7 +110,7 @@ export function taskRow(t, opts = {}) {
   } else if (t.checklist && t.checklist.length && !hidden) {
     meta.push(h('span.m', icon('list', 14), t.checklist.filter((c) => c.done).length + ' из ' + t.checklist.length));
   }
-  if (t.deadline && !done) meta.push(h('span.m', icon('flag', 14), deadlineLabel(t.deadline)));
+  if (t.deadline && !done) meta.push(h('span.m', icon('flag', 14), deadlineLabel(t.deadline) + (t.deadlineTime ? ', до ' + t.deadlineTime : '')));
   if (t.repeat) meta.push(h('span.m', icon('repeat', 14)));
   if (t.from && t.from.name) meta.push(h('span.m', 'от ' + t.from.name));
   if (t.waitFor) meta.push(h('span.m', 'жду: ' + t.waitFor));

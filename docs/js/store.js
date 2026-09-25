@@ -549,20 +549,26 @@ export function saveTemplate(tpl) { return change(() => put('templates', { ...tp
 export function blocksOn(d) {
   return segmentsOn(meta('blocks', []), dow(d), (b) => blockDur(b.areaId));
 }
+export function addBlocks(list) {
+  return change(() => setMeta('blocks', [...meta('blocks', []), ...list]));
+}
 /** Длительность блока без окончания — по умолчанию для области (изначально 1 час). */
 export const blockDur = (areaId) => Number((area(areaId) || {}).blockDur) || 60;
 
 /** Задачи со временем на дату: [{t, a, b}] в минутах суток; без окончания — точка (a === b). */
 export function timedOn(d, { activeOnly = true } = {}) {
   const res = [];
-  const prev = addDays(d, -1);
   for (const t of S.tasks.values()) {
     if (t.deletedAt || !t.time || t.waitFor || t.status === 'someday') continue;
     if (activeOnly && t.status !== 'active') continue;
     if (t.dateKind && t.dateKind !== 'day') continue;
     const a = toMin(t.time), dur = Number(t.dur) || 0;
     if (t.date === d) res.push({ t, a, b: Math.min(a + dur, 1440), cut: a + dur > 1440 });
-    else if (t.date === prev && a + dur > 1440) res.push({ t, a: 0, b: a + dur - 1440, cont: true });
+    else if (t.date < d && a + dur > 1440) {
+      // многодневная задача: часть, попадающая на этот день
+      const off = diffDays(t.date, d) * 1440;
+      if (a + dur > off) res.push({ t, a: 0, b: Math.min(a + dur - off, 1440), cont: true, cut: a + dur - off > 1440 });
+    }
   }
   return res.sort((x, y) => x.a - y.a);
 }
@@ -577,10 +583,11 @@ export function loadOf(d) {
   let m = 0;
   for (const b of blocksOn(d)) m += b.min;
   for (const t of S.tasks.values()) {
-    if (t.deletedAt || t.status === 'someday' || t.waitFor) continue;
-    if (t.status === 'done' && !(t.date === d)) continue;
+    if (t.deletedAt || t.status === 'someday' || t.waitFor || t.time) continue;
     if (t.date === d && (t.dateKind === 'day' || !t.dateKind)) m += taskMin(t);
   }
+  // со временем: отрезок — его часть в этот день (многодневные делятся по дням), точка — оценка усилия
+  for (const x of timedOn(d, { activeOnly: false })) m += x.b > x.a ? x.b - x.a : x.cont ? 0 : taskMin(x.t);
   const cap = capacityOf(d);
   const ratio = cap ? m / cap : m ? 2 : 0;
   return { min: m, cap, ratio, level: ratio < 0.75 ? 'ok' : ratio <= 1 ? 'busy' : 'over' };

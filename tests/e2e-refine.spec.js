@@ -132,7 +132,11 @@ test('голос в закрытой области: распознавание 
     window.__local = null;
     class FakeSR {
       static async available(o) { return o.processLocally ? 'available' : 'unavailable'; }
-      start() { window.__local = this.processLocally === true; setTimeout(() => { this.onresult({ results: [[{ transcript: 'перечитать записи сегодня' }]] }); this.onend(); }, 30); }
+      start() {
+        const first = window.__local === null;
+        window.__local = this.processLocally === true;
+        if (first) setTimeout(() => { const r = [{ transcript: 'перечитать записи сегодня' }]; r.isFinal = true; this.onresult({ resultIndex: 0, results: [r] }); }, 30);
+      }
       stop() {}
     }
     window.SpeechRecognition = FakeSR; window.webkitSpeechRecognition = FakeSR;

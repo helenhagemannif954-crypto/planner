@@ -2,8 +2,9 @@
 import { h, icon, toast, hideToast, choose, prompt, pickDate, pickTime, quickDays, buzz, clear } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
-import { parse, dateLabel, partLabel } from '../parse.js';
-import { fmtDay, addDays, weekStart } from '../dates.js';
+import { parse, dateLabel, partLabel, endLabel } from '../parse.js';
+import { describeBlock } from '../blocks.js';
+import { fmtDay, addDays, weekStart, dow, diffDays, dateTime } from '../dates.js';
 import { describe as describeRepeat } from '../recur.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize, pickTemplate } from './pickers.js';
 import { findCode, decode } from '../share.js';
@@ -31,6 +32,19 @@ function merged(state) {
   if (!m.templateId) m.newPerson = null;
   if (m.personId && o.personId !== undefined) m.newPerson = null;
   if ((m.star || m.time || m.part) && !m.date) { m.date = st.T(); m.dateKind = 'day'; }
+  // окончание и постоянный блок пересчитываются после ручных правок
+  if (m.time && m.endTime) {
+    let ed = m.endDate || m.date;
+    if (ed === m.date && m.endTime <= m.time) ed = addDays(ed, 1);
+    m.endDate = ed;
+    m.dur = Math.round((dateTime(ed, m.endTime) - dateTime(m.date, m.time)) / 60000);
+  }
+  if (!m.time && m.endTime && ('time' in o)) { m.endTime = null; m.endDate = null; }
+  if (o.asTask || !m.repeat || !m.time || !['weekly', 'daily'].includes(m.repeat.kind)) m.block = null;
+  else if (m.block || (o.asTask === false)) {
+    const days = m.repeat.kind === 'daily' ? [1, 2, 3, 4, 5, 6, 7] : m.repeat.days && m.repeat.days.length ? m.repeat.days : [dow(m.date)];
+    m.block = { days, start: m.time, end: m.endTime || null, endDays: m.endTime ? Math.max(0, diffDays(m.date, m.endDate)) : 0 };
+  }
   return m;
 }
 
@@ -61,7 +75,7 @@ export function composer(mode = 'inline', opts = {}) {
   input.addEventListener('focus', () => { if (mode === 'inline') hideToast(); if (!state.open) { state.open = true; root.classList.add('open'); renderExtra(); } });
   function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; }
   function collapse() {
-    if (mode !== 'inline' || state.text) return;
+    if (mode !== 'inline' || state.text || state.listening) return;
     state.open = false; state.over = {}; state.done = false;
     root.classList.remove('open');
     clear(extra);
@@ -80,16 +94,19 @@ export function composer(mode = 'inline', opts = {}) {
   function renderExtra() {
     if (!state.open) return;
     clear(extra);
+    if (state.listening) {
+      extra.append(h('button.stop-btn', { 'aria-label': 'Стоп', onclick: () => stopListening() }, h('span.rec-dot'), h('span', 'Идёт запись'), h('b', 'Стоп')));
+    }
     const m = merged(state);
     const o = state.over;
     const set = (patch) => { Object.assign(o, patch); renderExtra(); input.focus({ preventScroll: true }); };
     const parsed = [];
     if (state.text.trim()) {
       for (const c of m.chips.length || Object.keys(o).length ? chipsFor(m) : []) {
-        parsed.push(chipBtn(c.label, () => edit(c.key, m, set), () => remove(c.key, set), '.parsed', c.color ? h('span.dot', { style: { background: c.color } }) : null));
+        parsed.push(chipBtn(c.label, () => edit(c.key, m, set), c.key === 'text' ? null : () => remove(c.key, set), '.parsed', c.color ? h('span.dot', { style: { background: c.color } }) : null));
       }
     }
-    if (parsed.length) extra.append(h('div.chips', { 'aria-label': 'Распознано' }, parsed));
+    if (parsed.length) extra.append(h('div.chips.wrap', { 'aria-label': 'Распознано' }, parsed));
     // ручной выбор за 2 касания
     const quick = [];
     const now = st.clock();
@@ -123,6 +140,23 @@ export function composer(mode = 'inline', opts = {}) {
       case 'person': { const p = await pickPerson(m.personId, m.areaId); if (p !== undefined) set({ personId: p, newPerson: null }); break; }
       case 'template': { const t = await pickTemplate(); if (t) set({ templateId: t }); break; }
       case 'done': state.done = !state.done; renderExtra(); break;
+      case 'text': input.focus(); break;
+      case 'end': {
+        const d = await pickDate({ now, value: m.endDate || m.date, title: 'Окончание: день', allowWeek: false, allowMonth: false, noneLabel: 'Без окончания' });
+        if (!d) break;
+        if (!d.date) { set({ endDate: null, endTime: null, dur: null }); break; }
+        const t = await pickTime({ value: m.endTime, title: 'Окончание: время' });
+        if (t && t.time) set({ endDate: d.date, endTime: t.time });
+        break;
+      }
+      case 'block': {
+        const v = await choose('Как сохранить', [
+          { label: 'Постоянный блок недели', value: 'block', primary: !!m.block, hint: 'учитывается в нагрузке каждую неделю' },
+          { label: 'Повторяющаяся задача', value: 'task', primary: !m.block },
+        ]);
+        if (v) set({ asTask: v === 'task' });
+        break;
+      }
     }
   }
   function remove(key, set) {
@@ -130,55 +164,116 @@ export function composer(mode = 'inline', opts = {}) {
       date: { date: null, dateKind: null }, time: { time: null, part: null, dur: null }, deadline: { deadline: null },
       area: { areaId: null }, repeat: { repeat: null }, ctx: { ctx: null }, size: { size: null, dur: null }, star: { star: false },
       person: { personId: null, newPerson: null }, template: { templateId: null, newPerson: null },
+      end: { endDate: null, endTime: null, dur: null }, block: { asTask: true },
     };
+    if (key === 'text') { input.value = ''; state.text = ''; renderExtra(); return; }
     if (key === 'done') { state.done = false; renderExtra(); return; }
     set(map[key] || {});
   }
 
   // ——— голос ———
+  // Запись включается и выключается только кнопкой. Паузы не завершают её: если браузер сам
+  // обрывает распознавание (тишина, сбой), оно тихо перезапускается, пока запись «включена».
   let rec = null;
+  let voice = null; // {on, committed, interim, local, SR, quickFails, startedAt, gotResult}
+  const join = (a, b) => (a && b ? a.replace(/\s+$/, '') + ' ' + b.replace(/^\s+/, '') : a || b || '');
+  function showVoice() {
+    input.value = join(voice.committed, voice.interim).slice(0, 1000);
+    state.text = input.value;
+    autosize();
+    renderExtra();
+  }
   async function listen() {
+    if (voice && voice.on) { stopListening(); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const say = (hint) => { state.hint = hint; state.open = true; root.classList.add('open'); renderExtra(); input.focus(); };
     if (!SR) { say('Распознавание речи здесь недоступно — нажмите микрофон на клавиатуре и продиктуйте.'); return; }
-    if (state.listening && rec) { rec.stop(); return; }
     // распознавание на устройстве, если браузер его умеет; в закрытой области — только оно
     const local = await localSpeech(SR);
     if (!local && privateContext()) {
       say('В закрытой области голос не уходит в интернет, а распознавания на устройстве здесь нет. Продиктуйте с клавиатуры в офлайн-режиме или напишите.');
       return;
     }
+    voice = { on: true, committed: input.value.trim(), interim: '', local, SR, quickFails: 0 };
+    state.listening = true;
+    mic.classList.add('listening');
+    mic.setAttribute('aria-label', 'Остановить запись');
+    mic.replaceChildren(icon('stop'));
+    state.open = true; root.classList.add('open'); state.hint = '';
+    buzz(10);
+    startRec();
+    renderExtra();
+  }
+  function startRec() {
+    const v = voice;
+    if (!v || !v.on) return;
     try {
-      rec = new SR();
-      if (local) rec.processLocally = true;
-      rec.lang = 'ru-RU';
-      rec.interimResults = true;
-      rec.continuous = false;
-      rec.maxAlternatives = 1;
-      const base = input.value ? input.value.trim() + ' ' : '';
-      rec.onresult = (e) => {
-        let txt = '';
-        for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-        input.value = (base + txt).slice(0, 1000);
-        state.text = input.value;
-        autosize();
-        renderExtra();
+      const r = new v.SR();
+      rec = r;
+      if (v.local) r.processLocally = true;
+      r.lang = 'ru-RU';
+      r.continuous = true;
+      r.interimResults = true;
+      r.maxAlternatives = 1;
+      r.onresult = (e) => {
+        if (voice !== v) return;
+        v.gotResult = true;
+        let interim = '';
+        for (let i = e.resultIndex || 0; i < e.results.length; i++) {
+          const res = e.results[i];
+          const txt = (res[0] && res[0].transcript) || '';
+          if (res.isFinal) v.committed = join(v.committed, txt.trim());
+          else interim = join(interim, txt.trim());
+        }
+        v.interim = interim;
+        showVoice();
       };
-      rec.onerror = (e) => {
-        state.hint = e.error === 'not-allowed' ? 'Нет доступа к микрофону. Можно диктовать с клавиатуры.' : e.error === 'network' ? 'Для голоса нужен интернет. Можно диктовать с клавиатуры.' : 'Не расслышал. Попробуйте ещё раз.';
-        renderExtra();
+      r.onerror = (e) => {
+        if (voice !== v) return;
+        // тишина и обрыв — не повод останавливать: onend перезапустит
+        if (e.error === 'no-speech' || e.error === 'aborted') return;
+        const hint = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Можно диктовать с клавиатуры.'
+          : e.error === 'network' ? 'Для голоса нужен интернет. Можно диктовать с клавиатуры.'
+          : e.error === 'audio-capture' ? 'Микрофон занят или недоступен.' : null;
+        if (hint) { stopListening(); state.hint = hint; renderExtra(); }
       };
-      rec.onend = () => { state.listening = false; mic.classList.remove('listening'); };
-      rec.start();
-      buzz(10);
-      state.listening = true; mic.classList.add('listening');
-      state.open = true; root.classList.add('open'); state.hint = 'Говорите…'; renderExtra();
-      setTimeout(() => { if (state.hint === 'Говорите…') { state.hint = ''; } }, 4000);
+      r.onend = () => {
+        if (voice !== v) return;
+        // что успело прозвучать — сохраняем, и продолжаем слушать
+        if (v.interim) { v.committed = join(v.committed, v.interim); v.interim = ''; showVoice(); }
+        if (!v.on) return;
+        if (document.hidden) { v.pending = true; return; }
+        // защита только от мгновенных сбоев подряд (распознавание вообще не запускается);
+        // обычные обрывы по тишине перезапускаются всегда
+        v.quickFails = Date.now() - v.startedAt < 250 && !v.gotResult ? v.quickFails + 1 : 0;
+        if (v.quickFails >= 10) { stopListening(); state.hint = 'Распознавание не отвечает. Нажмите микрофон ещё раз.'; renderExtra(); return; }
+        setTimeout(startRec, 120);
+      };
+      v.startedAt = Date.now();
+      v.gotResult = false;
+      r.start();
     } catch {
+      stopListening();
       state.hint = 'Голос не запустился — нажмите микрофон на клавиатуре.';
       renderExtra();
     }
   }
+  function stopListening() {
+    const v = voice;
+    if (!v) return;
+    v.on = false;
+    try { if (rec) rec.stop(); } catch { /* уже остановлено */ }
+    if (v.interim) { v.committed = join(v.committed, v.interim); v.interim = ''; showVoice(); }
+    state.listening = false;
+    mic.classList.remove('listening');
+    mic.setAttribute('aria-label', 'Голосом');
+    mic.replaceChildren(icon('mic'));
+    buzz(8);
+    renderExtra();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && voice && voice.on && voice.pending) { voice.pending = false; startRec(); }
+  });
 
   function privateContext() {
     const priv = (id) => { const a = st.area(id); return !!(a && a.private); };
@@ -193,6 +288,7 @@ export function composer(mode = 'inline', opts = {}) {
 
   // ——— сохранение ———
   async function submit() {
+    if (voice && voice.on) stopListening();
     const text = input.value.trim();
     if (!text) { input.focus(); return; }
     const code = findCode(text);
@@ -242,24 +338,37 @@ function chipsFor(m) {
   if (m.templateId) { const t = S.templates.get(m.templateId); c.push({ key: 'template', label: 'цепочка: ' + (t ? t.name : '') }); }
   if (m.personId) { const p = S.people.get(m.personId); c.push({ key: 'person', label: p ? p.code : '' }); }
   else if (m.newPerson) c.push({ key: 'person', label: m.newPerson + ' (новый)' });
-  if (m.date) c.push({ key: 'date', label: dateLabel(m.date, m.dateKind, now) });
-  if (m.time) c.push({ key: 'time', label: m.time + (m.dur ? ' · ' + (m.dur >= 60 ? m.dur / 60 + ' ч' : m.dur + ' мин') : '') });
+  if (m.text && !m.templateId) c.unshift({ key: 'text', label: '«' + (m.text.length > 40 ? m.text.slice(0, 40) + '…' : m.text) + '»' });
+  if (m.date && !m.block) c.push({ key: 'date', label: dateLabel(m.date, m.dateKind, now) });
+  if (m.time) c.push({ key: 'time', label: (m.endTime ? 'с ' : '') + m.time + (!m.endTime && m.dur ? ' · ' + (m.dur >= 60 ? m.dur / 60 + ' ч' : m.dur + ' мин') : '') });
   else if (m.part) c.push({ key: 'time', label: partLabel(m.part) });
-  if (m.deadline) c.push({ key: 'deadline', label: 'срок ' + fmtDay(m.deadline, now) });
-  if (m.repeat) c.push({ key: 'repeat', label: describeRepeat(m.repeat) });
+  if (m.endTime) c.push({ key: 'end', label: endLabel(m, now) });
+  if (m.deadline) c.push({ key: 'deadline', label: 'срок ' + fmtDay(m.deadline, now) + (m.deadlineTime ? ' до ' + m.deadlineTime : '') });
+  if (m.block) c.push({ key: 'block', label: 'постоянный блок: ' + m.block.days.map((d) => describeBlock({ dow: d, start: m.block.start, end: m.block.end, endDays: m.block.endDays }, 60).replace(/ · .*$/, '')).join(', ') });
+  else if (m.repeat) c.push({ key: 'repeat', label: describeRepeat(m.repeat) });
   if (m.star) c.push({ key: 'star', label: '★ главное' });
   if (m.areaId) { const a = st.area(m.areaId); if (a) c.push({ key: 'area', label: a.name, color: a.color }); }
   if (m.ctx) { const x = st.contexts().find((y) => y.id === m.ctx); if (x) c.push({ key: 'ctx', label: x.name }); }
   if (m.size && !m.time) c.push({ key: 'size', label: { S: 'быстро', M: 'около часа', L: 'большое' }[m.size] });
-  if (!c.length || (!m.date && !m.areaId && !m.deadline && !m.templateId && !m.done)) c.push({ key: 'inbox', label: '→ во «Входящие»' });
+  if (!m.date && !m.areaId && !m.deadline && !m.templateId && !m.done && !m.block) c.push({ key: 'inbox', label: '→ во «Входящие»' });
   return c;
 }
 
 /** Создать задачу из разобранного ввода. */
 export async function createFromParse(m) {
+  // повтор по неделе с началом и окончанием — это постоянный блок недели, а не разовая задача
+  if (m.block && !m.done) {
+    const b = m.block;
+    const list = b.days.map((d) => ({ id: st.uid(), title: m.text || 'Блок', areaId: m.areaId || null, dow: d, start: b.start, ...(b.end ? { end: b.end, endDays: b.endDays || 0 } : {}) }));
+    const r = st.addBlocks(list);
+    const msg = 'Постоянный блок: ' + list.map((x) => describeBlock(x, st.blockDur(x.areaId))).join(', ');
+    toast(msg, { action: 'Отменить', onAction: () => r.undo() });
+    buzz(8);
+    return { block: list, undo: r.undo, message: msg, saved: r.saved };
+  }
   const fields = {
     text: m.text, date: m.date, dateKind: m.date ? m.dateKind || 'day' : null, time: m.time, part: m.time ? null : m.part,
-    dur: m.dur, deadline: m.deadline, size: m.size, repeat: m.repeat, ctx: m.ctx, areaId: m.areaId, personId: m.personId || null,
+    dur: m.dur, deadline: m.deadline, deadlineTime: m.deadline ? m.deadlineTime || null : null, size: m.size, repeat: m.repeat, ctx: m.ctx, areaId: m.areaId, personId: m.personId || null,
   };
   if (m.star) fields.star = m.date || st.T();
   if (m.done) {

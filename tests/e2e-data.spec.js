@@ -152,9 +152,10 @@ test('ярлык «Голосом»: без распознавания речи 
 
 test('голос: распознанный текст проходит тот же разбор', async ({ page }) => {
   await page.addInitScript(() => {
+    let n = 0;
     class FakeSR {
-      start() { setTimeout(() => { this.onresult({ results: [[{ transcript: 'позвонить маме завтра в 18' }]] }); this.onend(); }, 50); }
-      stop() {}
+      start() { if (n++ === 0) setTimeout(() => { const r = [{ transcript: 'позвонить маме завтра в 18' }]; r.isFinal = true; this.onresult({ resultIndex: 0, results: [r] }); this.onend(); }, 50); }
+      stop() { setTimeout(() => this.onend && this.onend(), 0); }
     }
     window.webkitSpeechRecognition = FakeSR;
     window.SpeechRecognition = FakeSR;

@@ -31,7 +31,7 @@ export function buildIcs(task, opts = {}) {
     alarms = ['-PT15M'];
   } else {
     const d = task.deadline || task.date;
-    start = dateTime(d, task.time || '18:00');
+    start = dateTime(d, task.deadlineTime || task.time || '18:00');
     end = new Date(start.getTime() + 30 * 60000);
     alarms = ['-P1D', '-PT2H'];
   }

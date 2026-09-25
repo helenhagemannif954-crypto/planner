@@ -46,6 +46,7 @@ export function clear(el) { while (el.firstChild) el.removeChild(el.firstChild);
 const P = {
   check: 'M5 12.5l4.2 4.2L19 7',
   plus: 'M12 5v14M5 12h14',
+  stop: 'M7.5 7.5h9v9h-9z',
   mic: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3',
   search: 'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM15.5 15.5L20 20',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
