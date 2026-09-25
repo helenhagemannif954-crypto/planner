@@ -7,7 +7,7 @@ import { fmtDay, DOW_SHORT, DOW_FULL, ymd, fmtShort } from '../dates.js';
 import { app, taskRow, emptyState, sectionHead, hiddenArea, unlockArea } from './common.js';
 import { describeBlock } from '../blocks.js';
 import { install, checkInstall, standalone, browserName } from '../install.js';
-import { METHODS, calendarMode, diagHistory, diagText, deliverIcs, testIcs, markLast, clearDiag, SEEN } from './calendar.js';
+import { METHODS, diagHistory, diagText, tryMethod, testIcs, markLast, clearDiag, SEEN, calendarLink, stepsBlock } from './calendar.js';
 
 export function openSettings() {
   const s = sheet(() => {
@@ -27,14 +27,6 @@ export function openSettings() {
       }),
       h('button.line-btn', { role: 'switch', 'aria-checked': String(cfg.autoCalendar !== false), onclick: () => st.setSettings({ autoCalendar: cfg.autoCalendar === false }) },
         icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу передать событие в Яндекс.Календарь')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
-      line('cal', 'Как передавать в календарь', calendarMode() === 'auto' ? 'автоматически' : METHODS[calendarMode()], async () => {
-        const cur = calendarMode();
-        const v = await choose('Как передавать в календарь', [
-          { label: 'Автоматически', hint: 'share с файлом → прямой переход по blob-ссылке → скачивание', value: 'auto', primary: cur === 'auto' },
-          ...Object.keys(METHODS).map((k) => ({ label: METHODS[k], value: k, primary: cur === k })),
-        ], { text: 'Какой способ открывает Яндекс.Календарь на вашем телефоне, видно в «Диагностике календаря»: сделайте пробную попытку каждым способом и отметьте, что произошло.' });
-        if (v) st.setSettings({ calendarMode: v });
-      }),
       line('cal', 'Диагностика календаря', diagHistory().length ? String(diagHistory().length) : null, () => calendarDiagSheet()),
       line('lock', 'PIN для закрытых областей', cfg.pinHash ? 'задан' : 'нет', () => pinSheet()),
       line('download', 'Установка на рабочий стол', null, () => installSheet()),
@@ -232,24 +224,23 @@ async function pinSheet() {
 
 // ——— диагностика календаря ———
 export function calendarDiagSheet() {
+  let downloaded = false;
   sheet((api) => {
     const last = diagHistory()[0];
     // вызов прямо из нажатия: иначе браузер не разрешит «Поделиться»
-    const attempt = (mode) => deliverIcs(testIcs(), 'proverka.ics', 'Проверка планировщика', mode ? { mode } : {}).then(() => api.refresh());
+    const attempt = (mode) => tryMethod(mode, testIcs(), 'proverka.ics', 'Проверка планировщика').then(() => api.refresh());
     return h('div',
       h('pre.diag', { 'aria-label': 'Текст диагностики' }, diagText()),
       last && !last.seen ? h('div.card',
         h('div', 'Что произошло на экране после последней попытки?'),
         h('div.chips.wrap', Object.keys(SEEN).map((k) => h('button.chip', { onclick: () => { markLast(k); api.refresh(); } }, SEEN[k])))) : null,
-      last && last.seen === 'calendar' && last.method !== calendarMode() ? h('button.btn.primary.block', {
-        onclick: () => { st.setSettings({ calendarMode: last.method }); toast('Способ сохранён: ' + METHODS[last.method]); api.refresh(); },
-      }, 'Использовать этот способ: ' + METHODS[last.method]) : null,
-      h('button.btn.primary.block', { onclick: () => attempt() }, icon('cal', 18), 'Пробная попытка'),
-      h('p.muted.small', 'Отправляет событие «Проверка планировщика (можно удалить)» на завтра, 10:00 — выбранным в настройках способом. Или попробуйте конкретный способ:'),
-      h('div.chips.wrap', Object.keys(METHODS).map((k) => h('button.chip', { onclick: () => attempt(k) }, METHODS[k]))),
+      downloaded ? stepsBlock() : null,
+      calendarLink(testIcs(), 'proverka.ics', { label: 'Скачать пробный файл', source: 'diag', onDone: () => { downloaded = true; api.refresh(); } }),
+      h('p.muted.small', 'Основной способ: вы сами нажимаете ссылку, файл события «Проверка планировщика (можно удалить)» на завтра, 10:00 скачивается. Остальные способы — только для проверки, по умолчанию не используются:'),
+      h('div.chips.wrap', ['share', 'link', 'nav', 'auto'].map((k) => h('button.chip', { onclick: () => attempt(k) }, METHODS[k]))),
       h('div.row-btns',
         h('button.btn', { onclick: async () => toast((await copyText(diagText())) ? 'Текст диагностики скопирован' : 'Не удалось скопировать') }, 'Скопировать текст'),
-        h('button.btn', { onclick: () => { clearDiag(); api.refresh(); } }, 'Очистить историю')),
+        h('button.btn', { onclick: () => { clearDiag(); downloaded = false; api.refresh(); } }, 'Очистить историю')),
     );
   }, { title: 'Диагностика календаря' });
 }

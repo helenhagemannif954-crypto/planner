@@ -2,7 +2,7 @@
 import { h, icon, toast, hideToast, choose, prompt, pickDate, pickTime, quickDays, buzz, clear } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
-import { parse, dateLabel, partLabel, endLabel } from '../parse.js';
+import { parse, dateLabel, partLabel, endLabel, collapseRepeats } from '../parse.js';
 import { describeBlock } from '../blocks.js';
 import { fmtDay, addDays, weekStart, dow, diffDays, dateTime } from '../dates.js';
 import { describe as describeRepeat } from '../recur.js';
@@ -175,11 +175,14 @@ export function composer(mode = 'inline', opts = {}) {
   // ——— голос ———
   // Запись включается и выключается только кнопкой. Паузы не завершают её: если браузер сам
   // обрывает распознавание (тишина, сбой), оно тихо перезапускается, пока запись «включена».
+  // Текст каждого сеанса распознавания собирается заново из событий именно этого сеанса
+  // (final заменяет interim, а не дописывается), к уже записанному он присоединяется один раз —
+  // в onend, после последнего результата сеанса. События старых сеансов не принимаются.
   let rec = null;
-  let voice = null; // {on, committed, interim, local, SR, quickFails, startedAt, gotResult}
+  let voice = null; // {on, closed, base, session, local, SR, quickFails, startedAt, gotResult}
   const join = (a, b) => (a && b ? a.replace(/\s+$/, '') + ' ' + b.replace(/^\s+/, '') : a || b || '');
   function showVoice() {
-    input.value = join(voice.committed, voice.interim).slice(0, 1000);
+    input.value = collapseRepeats(join(voice.base, voice.session)).slice(0, 1000);
     state.text = input.value;
     autosize();
     renderExtra();
@@ -195,7 +198,12 @@ export function composer(mode = 'inline', opts = {}) {
       say('В закрытой области голос не уходит в интернет, а распознавания на устройстве здесь нет. Продиктуйте с клавиатуры в офлайн-режиме или напишите.');
       return;
     }
-    voice = { on: true, committed: input.value.trim(), interim: '', local, SR, quickFails: 0 };
+    if (voice) {
+      // прошлая запись: её текст уже в поле, поздние события больше не нужны
+      voice.closed = true;
+      if (rec) { try { rec.abort ? rec.abort() : rec.stop(); } catch { /* уже остановлено */ } rec = null; }
+    }
+    voice = { on: true, closed: false, base: input.value.trim(), session: '', local, SR, quickFails: 0 };
     state.listening = true;
     mic.classList.add('listening');
     mic.setAttribute('aria-label', 'Остановить запись');
@@ -207,7 +215,7 @@ export function composer(mode = 'inline', opts = {}) {
   }
   function startRec() {
     const v = voice;
-    if (!v || !v.on) return;
+    if (!v || !v.on || v.closed || rec) return; // пока прежний сеанс не завершился, новый не начинаем
     try {
       const r = new v.SR();
       rec = r;
@@ -216,21 +224,15 @@ export function composer(mode = 'inline', opts = {}) {
       r.continuous = true;
       r.interimResults = true;
       r.maxAlternatives = 1;
+      const mine = () => voice === v && rec === r && !v.closed;
       r.onresult = (e) => {
-        if (voice !== v) return;
+        if (!mine()) return;
         v.gotResult = true;
-        let interim = '';
-        for (let i = e.resultIndex || 0; i < e.results.length; i++) {
-          const res = e.results[i];
-          const txt = (res[0] && res[0].transcript) || '';
-          if (res.isFinal) v.committed = join(v.committed, txt.trim());
-          else interim = join(interim, txt.trim());
-        }
-        v.interim = interim;
+        v.session = sessionTranscript(e.results);
         showVoice();
       };
       r.onerror = (e) => {
-        if (voice !== v) return;
+        if (!mine()) return;
         // тишина и обрыв — не повод останавливать: onend перезапустит
         if (e.error === 'no-speech' || e.error === 'aborted') return;
         const hint = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Можно диктовать с клавиатуры.'
@@ -239,9 +241,12 @@ export function composer(mode = 'inline', opts = {}) {
         if (hint) { stopListening(); state.hint = hint; renderExtra(); }
       };
       r.onend = () => {
-        if (voice !== v) return;
-        // что успело прозвучать — сохраняем, и продолжаем слушать
-        if (v.interim) { v.committed = join(v.committed, v.interim); v.interim = ''; showVoice(); }
+        if (!mine()) return;
+        rec = null;
+        // сеанс завершён — его текст присоединяется ровно один раз
+        v.base = collapseRepeats(join(v.base, v.session));
+        v.session = '';
+        showVoice();
         if (!v.on) return;
         if (document.hidden) { v.pending = true; return; }
         // защита только от мгновенных сбоев подряд (распознавание вообще не запускается);
@@ -254,17 +259,25 @@ export function composer(mode = 'inline', opts = {}) {
       v.gotResult = false;
       r.start();
     } catch {
+      rec = null;
       stopListening();
       state.hint = 'Голос не запустился — нажмите микрофон на клавиатуре.';
       renderExtra();
     }
   }
-  function stopListening() {
+  /** close: текст берём как есть сейчас, поздние результаты уже не нужны (сохранение). */
+  function stopListening({ close = false } = {}) {
     const v = voice;
     if (!v) return;
     v.on = false;
+    // без close последний результат сеанса ещё придёт и заменит показанный текст, а не допишется
     try { if (rec) rec.stop(); } catch { /* уже остановлено */ }
-    if (v.interim) { v.committed = join(v.committed, v.interim); v.interim = ''; showVoice(); }
+    if (close) {
+      v.base = collapseRepeats(join(v.base, v.session));
+      v.session = '';
+      v.closed = true;
+      rec = null;
+    }
     state.listening = false;
     mic.classList.remove('listening');
     mic.setAttribute('aria-label', 'Голосом');
@@ -289,7 +302,10 @@ export function composer(mode = 'inline', opts = {}) {
 
   // ——— сохранение ———
   async function submit() {
-    if (voice && voice.on) stopListening();
+    if (voice && !voice.closed) {
+      if (voice.on || rec) stopListening({ close: true });
+      else voice.closed = true;
+    }
     const text = input.value.trim();
     if (!text) { input.focus(); return; }
     const code = findCode(text);
@@ -299,7 +315,8 @@ export function composer(mode = 'inline', opts = {}) {
       if (obj) { reset(); acceptShared(obj); return; }
     }
     const m = merged(state);
-    if (!m.text && !m.templateId) m.text = text;
+    // всё сказанное ушло в поля (дата, время, область…) — фразу целиком в текст не возвращаем
+    if (!m.text && !m.templateId) m.text = 'Без названия';
     let result;
     if (m.templateId) result = await launchFromParse(m);
     else result = await createFromParse(m);
@@ -319,6 +336,28 @@ export function composer(mode = 'inline', opts = {}) {
   root.setText = (t) => { input.value = t; state.text = t; autosize(); state.open = true; root.classList.add('open'); renderExtra(); };
   if (mode === 'full') setTimeout(renderExtra, 0);
   return root;
+}
+
+const normSpeech = (t) => t.toLowerCase().replace(/ё/g, 'е').replace(/[.,;:!?]/g, '').replace(/\s+/g, ' ').trim();
+/**
+ * Текст одного сеанса распознавания — заново из всех его результатов (final и interim) при каждом
+ * событии, без накопления между событиями. Chrome на Android присылает накопительные результаты
+ * («купить», «купить молоко») и повторяет уже окончательные — такие не дописываются, а заменяют.
+ */
+export function sessionTranscript(results) {
+  const parts = [];
+  for (let i = 0; i < (results ? results.length : 0); i++) {
+    const res = results[i];
+    const t = ((res && res[0] && res[0].transcript) || '').trim();
+    if (!t) continue;
+    if (parts.length) {
+      const a = normSpeech(parts[parts.length - 1]), b = normSpeech(t);
+      if (b === a || (b.includes(' ') && a.endsWith(' ' + b))) continue; // повтор
+      if (b.startsWith(a + ' ')) { parts[parts.length - 1] = t; continue; } // накопительный результат
+    }
+    parts.push(t);
+  }
+  return collapseRepeats(parts.join(' '));
 }
 
 /** Доступно ли распознавание речи прямо на устройстве (без отправки звука). */
@@ -399,11 +438,10 @@ export async function createFromParse(m) {
   const r = st.addTask(fields);
   const t = r.result;
   const now = st.clock();
-  // сразу вслед за сохранением — системный выбор приложения для .ics (иначе браузер не разрешит)
+  // сразу вслед за сохранением — ссылка «В календарь» в тосте (нажимает человек)
   const cal = offerCalendar(t);
   let where = m.done ? 'Записано в сделанное' : t.inbox ? 'Во «Входящие»' : t.date ? 'Добавлено: ' + dateLabel(t.date, t.dateKind, now) : 'Добавлено';
-  if (cal) where += '. ' + cal;
-  toast(where, { action: 'Отменить', onAction: () => r.undo(), duration: cal ? 10000 : undefined });
+  toast(where, { extra: cal, action: 'Отменить', onAction: () => r.undo(), duration: cal ? 12000 : undefined });
   buzz(8);
   return { task: t, undo: r.undo, message: where, saved: r.saved };
 }
@@ -458,9 +496,8 @@ export async function launchFromParse(m) {
   }
   let msg = 'Цепочка: ' + (st.isPrivate({ areaId: r.group.areaId }) ? tpl.name : r.group.title);
   const anchorT = r.tasks.find((x) => x.isAnchor);
-  const calHint = anchorT && offerCalendar(S.tasks.get(anchorT.id));
-  if (calHint) msg += '. ' + calHint;
-  toast(msg, { action: 'Отменить', onAction: () => r.undo(), duration: calHint ? 10000 : undefined });
+  const cal = anchorT && offerCalendar(S.tasks.get(anchorT.id));
+  toast(msg, { extra: cal, action: 'Отменить', onAction: () => r.undo(), duration: cal ? 12000 : undefined });
   buzz(8);
   return { group: r.group, undo: r.undo, message: msg, saved: r.saved };
 }

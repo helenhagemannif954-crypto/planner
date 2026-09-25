@@ -185,7 +185,9 @@ export function toast(msg, opts = {}) {
     document.body.append(toastEl);
   }
   clear(toastEl);
+  toastEl.classList.toggle('wide', !!opts.extra); // со ссылкой: текст — отдельной строкой
   toastEl.append(h('span.toast-msg', msg));
+  if (opts.extra) toastEl.append(opts.extra); // готовый элемент, например ссылка «В календарь»
   if (opts.action) {
     toastEl.append(h('button.toast-act', {
       onclick: () => { hideToast(); opts.onAction && opts.onAction(); },

@@ -30,8 +30,8 @@ export async function sendTask(t) {
   if (st.isPrivate(t)) { toast('Задачи закрытой области не отправляются'); return false; }
   // у задачи с датой и временем другой путь — общий календарь (его видят оба)
   if (t.date || t.time) {
-    const { sendToCalendar } = await import('./calendar.js');
-    await sendToCalendar(t);
+    const { calendarSheet } = await import('./calendar.js');
+    calendarSheet(t);
     return false;
   }
   const c = await pickContact('Отправить задачу');

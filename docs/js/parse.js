@@ -180,7 +180,7 @@ function resolveDay(d, T, base) {
 export function parse(input, ctx = {}) {
   const now = ctx.now || new Date();
   const T = today(now);
-  const orig = String(input || '').slice(0, 2000);
+  const orig = collapseRepeats(String(input || '').slice(0, 2000));
   const st = { orig, low: orig.toLowerCase().replace(/ё/g, 'е') };
   const r = {
     text: '', date: null, dateKind: null, time: null, part: null, dur: null, deadline: null, deadlineTime: null,
@@ -653,6 +653,16 @@ export function parse(input, ctx = {}) {
   }
 
   r.text = cleanup(st.orig);
+  // Остатки распознанного: если в тексте ещё раз встречаются те же дата, время, срок и т. п.
+  // («…завтра в 10 … завтра в 10» после сбоя голоса), вычитаем и их — но только когда повторный
+  // разбор не находит ничего нового или противоречащего.
+  if (!ctx.residual) {
+    for (let k = 0; k < 3 && r.text; k++) {
+      const again = parse(r.text, { ...ctx, residual: true });
+      if (again.text === r.text || !sameExtraction(r, again)) break;
+      r.text = again.text;
+    }
+  }
   r.recognized = !!(r.date || r.deadline || r.areaId || r.templateId || r.repeat || r.personId);
   r.chips = chipsOf(r, ctx, now);
   return r;
@@ -665,6 +675,49 @@ function matchAreaTag(tag, areas) {
     act.find((a) => n(a.name).startsWith(tag)) ||
     act.find((a) => (a.synonyms || []).some((s) => n(s) === tag || stem(s) === stem(tag))) ||
     null;
+}
+
+const RESIDUAL_KEYS = ['date', 'dateKind', 'time', 'part', 'endDate', 'endTime', 'deadline', 'deadlineTime', 'repeat', 'areaId', 'ctx', 'dur', 'star', 'done'];
+/** Повторный разбор нашёл только то, что уже распознано (ничего нового, ничего другого). */
+function sameExtraction(r, again) {
+  let found = false;
+  for (const k of RESIDUAL_KEYS) {
+    const v = again[k];
+    if (v == null || v === false) continue;
+    if (JSON.stringify(v) !== JSON.stringify(r[k])) return false;
+    found = true;
+  }
+  return found && !again.templateId && !again.personId && !again.newPerson;
+}
+
+/**
+ * Подряд повторённый кусок из двух и более слов оставляем один раз:
+ * «купить молоко завтра в 10 купить молоко завтра в 10» → «купить молоко завтра в 10».
+ * Так распознавание речи на Android иногда дублирует фразу.
+ */
+export function collapseRepeats(s) {
+  const toks = s.split(/(\s+)/).filter((x) => x !== '');
+  const words = [];
+  for (let i = 0; i < toks.length; i++) if (!/^\s+$/.test(toks[i])) words.push(toks[i]);
+  if (words.length < 4) return s;
+  const key = (w) => w.toLowerCase().replace(/ё/g, 'е').replace(/[.,;:!?«»"()]/g, '');
+  let changed = true;
+  let w = words;
+  while (changed) {
+    changed = false;
+    outer: for (let len = Math.floor(w.length / 2); len >= 2; len--) {
+      for (let i = 0; i + 2 * len <= w.length; i++) {
+        let eq = true, words = 0;
+        for (let j = 0; j < len && eq; j++) {
+          eq = key(w[i + j]) === key(w[i + len + j]);
+          if (key(w[i + j])) words++;
+        }
+        eq = eq && words >= 2; // одиночные «да да» и знаки не трогаем
+        if (eq) { w = [...w.slice(0, i + len), ...w.slice(i + 2 * len)]; changed = true; break outer; }
+      }
+    }
+  }
+  return w === words ? s : w.join(' ');
 }
 
 function cleanup(s) {

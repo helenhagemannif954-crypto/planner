@@ -132,3 +132,112 @@ test('окончание без начала — срок со временем'
   const d = await dump(page);
   expect(d.data.tasks[0]).toMatchObject({ text: 'Сдать отчёт', deadline: '2026-09-28', deadlineTime: '18:00', time: null });
 });
+
+// ——— как ведёт себя распознавание на Android: накопительные и повторные результаты ———
+// Сценарий: для каждого сеанса — список событий; событие — массив результатов [текст, final?].
+const scriptedSpeech = (sessions) => {
+  window.__sr = [];
+  const ev = (list) => {
+    const results = list.map(([t, fin]) => { const r = [{ transcript: t }]; r.isFinal = !!fin; return r; });
+    return { resultIndex: 0, results };
+  };
+  class FakeSR {
+    constructor() { this.n = window.__sr.length; this.stopped = false; window.__sr.push(this); }
+    start() {
+      const plan = sessions[this.n] || { events: [], end: true };
+      plan.events.forEach((list, i) => setTimeout(() => { if (!this.stopped || plan.afterStop) this.onresult(ev(list)); }, 60 * (i + 1)));
+      if (plan.end) setTimeout(() => { if (!this.stopped) this.onend(); }, 60 * (plan.events.length + 1) + 40);
+      // поздний результат уже завершённого сеанса — должен игнорироваться
+      if (plan.late) setTimeout(() => this.onresult(ev(plan.late)), 60 * (plan.events.length + 1) + 400);
+    }
+    stop() {
+      this.stopped = true;
+      const plan = sessions[this.n] || {};
+      // Chrome присылает окончательный результат после stop(), затем onend
+      setTimeout(() => { if (plan.finalOnStop) this.onresult(ev(plan.finalOnStop)); setTimeout(() => this.onend(), 20); }, 30);
+    }
+  }
+  window.SpeechRecognition = FakeSR;
+  window.webkitSpeechRecognition = FakeSR;
+};
+
+test('Android: накопительные interim/final и повтор уже окончательных — без дублей; перезапуск не склеивает сеансы', async ({ page }) => {
+  await page.addInitScript(scriptedSpeech, [
+    {
+      events: [
+        [['купить', false]],
+        [['купить молоко', false]],
+        [['купить молоко', true]],
+        [['купить молоко', true], ['купить молоко завтра', false]], // resultIndex 0: окончательный пришёл снова
+        [['купить молоко', true], ['купить молоко завтра в 10', true]], // накопительный final
+      ],
+      end: true,
+      late: [['купить молоко завтра в 10', true]],
+    },
+    // новый сеанс после обрыва: Android иногда повторяет последнюю фразу прошлого сеанса
+    { events: [[['завтра в 10', false]], [['завтра в 10', true]]], end: true },
+    { events: [], end: false, finalOnStop: [] },
+  ]);
+  await start(page, { now: MON });
+  await page.getByRole('button', { name: 'Голосом' }).click();
+  const inp = page.getByLabel('Новая задача');
+  await page.waitForFunction(() => window.__sr.length >= 3);
+  await page.waitForTimeout(600); // поздний результат первого сеанса
+  await expect(inp).toHaveValue('купить молоко завтра в 10');
+  await page.getByRole('button', { name: 'Стоп' }).click();
+  await expect(inp).toHaveValue('купить молоко завтра в 10');
+  await page.getByRole('button', { name: 'Добавить' }).click();
+  const d = await dump(page);
+  expect(d.data.tasks[0]).toMatchObject({ text: 'Купить молоко', date: '2026-09-29', time: '10:00' });
+});
+
+test('после «Стоп» окончательный результат заменяет показанный interim, а не дописывается к нему', async ({ page }) => {
+  await page.addInitScript(scriptedSpeech, [
+    { events: [[['позвонить в банк', false]], [['позвонить в банк завтра в', false]]], end: false, finalOnStop: [['позвонить в банк завтра в 11', true]] },
+  ]);
+  await start(page, { now: MON });
+  await page.getByRole('button', { name: 'Голосом' }).click();
+  const inp = page.getByLabel('Новая задача');
+  await expect(inp).toHaveValue('позвонить в банк завтра в');
+  await page.getByRole('button', { name: 'Стоп' }).click();
+  await expect(inp).toHaveValue('позвонить в банк завтра в 11');
+  await page.waitForTimeout(300);
+  await expect(inp).toHaveValue('позвонить в банк завтра в 11');
+  await page.getByRole('button', { name: 'Добавить' }).click();
+  const d = await dump(page);
+  expect(d.data.tasks[0]).toMatchObject({ text: 'Позвонить в банк', date: '2026-09-29', time: '11:00' });
+});
+
+test('сохранение во время записи: текст берётся как есть, поздний результат не возвращается в пустое поле', async ({ page }) => {
+  await page.addInitScript(scriptedSpeech, [
+    { events: [[['встреча с врачом в пятницу в 15', false]]], end: false, finalOnStop: [['встреча с врачом в пятницу в 15', true]] },
+  ]);
+  await start(page, { now: MON });
+  await page.getByRole('button', { name: 'Голосом' }).click();
+  const inp = page.getByLabel('Новая задача');
+  await expect(inp).toHaveValue('встреча с врачом в пятницу в 15');
+  await page.getByRole('button', { name: 'Добавить' }).click();
+  await page.waitForTimeout(300);
+  await expect(inp).toHaveValue('');
+  const d = await dump(page);
+  expect(d.data.tasks).toHaveLength(1);
+  expect(d.data.tasks[0]).toMatchObject({ text: 'Встреча с врачом', date: '2026-10-02', time: '15:00' });
+});
+
+test('дважды надиктованная фраза: в тексте задачи не остаются слова, ушедшие в дату и время', async ({ page }) => {
+  await start(page, { now: MON });
+  const inp = page.getByLabel('Новая задача');
+  for (const [said, text] of [
+    ['купить молоко завтра в 10 купить молоко завтра в 10', 'Купить молоко'],
+    ['Позвонить маме завтра в 18:00. Позвонить маме завтра в 18:00.', 'Позвонить маме'],
+    ['забрать детей из школы завтра в 13:30. Завтра в 13:30', 'Забрать детей из школы'],
+  ]) {
+    await inp.click();
+    await inp.fill(said);
+    await expect(page.getByLabel('Распознано')).toContainText('«' + text + '»');
+    await inp.press('Enter');
+  }
+  const d = await dump(page);
+  expect(d.data.tasks.map((t) => t.text).sort()).toEqual(['Забрать детей из школы', 'Купить молоко', 'Позвонить маме']);
+  for (const t of d.data.tasks) expect(t.text).not.toMatch(/завтра|\d/i);
+});

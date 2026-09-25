@@ -1,31 +1,30 @@
-// Один общий календарь (Яндекс) через .ics. Порядок попытки:
-// 1) navigator.share с файлом — системное окно «Отправить в…», где есть Яндекс.Календарь;
-// 2) если файлом поделиться нельзя или это упало — прямой переход по blob-ссылке (без download),
-//    чтобы Android сам предложил приложение для содержимого;
-// 3) скачивание — последний запасной вариант.
-// Любой способ можно закрепить в настройках; каждая попытка пишется в историю (localStorage, 5 последних),
-// которую показывает экран «Диагностика календаря».
-import { toast } from '../ui.js';
+// Один общий календарь (Яндекс) через файл .ics.
+// Основной способ — скачивание по НАСТОЯЩЕЙ видимой ссылке <a href="blob:…" download="…">,
+// которую человек нажимает сам. Программный .click() по скрытой ссылке и «Поделиться» файлом
+// по умолчанию не используются: на телефонах (Chrome на Android) первое молча блокируется,
+// второе падает с NotAllowedError (.ics нет в списке разрешённых типов). Переход по blob-ссылке
+// ничего не открывает: другие приложения blob-ссылку не видят.
+// Остальные способы можно попробовать вручную в «Диагностике календаря»; каждая попытка
+// пишется в историю (localStorage, 5 последних).
+import { h, icon, hideToast, sheet } from '../ui.js';
 import * as st from '../store.js';
 import { buildIcs, checkIcs } from '../ics.js';
+import { fmtDay } from '../dates.js';
 
+export const STEPS = 'Файл готов. Смахните шторку уведомлений сверху экрана → нажмите на уведомление о загруженном файле → выберите Яндекс.Календарь';
 export const HINTS = {
   shared: 'Выберите Яндекс.Календарь в списке приложений.',
   opened: 'Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь.',
-  downloaded: 'Файл скачан в Загрузки. Откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь',
+  downloaded: STEPS,
 };
 export const CHECK_HINT = 'Если календарь не предложат выбрать — после открытия проверьте, что событие создано в общем календаре, а не в личном; при необходимости переместите его в Яндекс.Календаре вручную (долгое нажатие на событие → Переместить в календарь)';
 export const autoCalendar = () => st.settings().autoCalendar !== false;
-// Способы передачи. «auto» — share с файлом, если браузер умеет, иначе прямой переход по blob-ссылке.
 export const METHODS = {
+  download: 'скачивание по нажатию на ссылку',
   share: 'share с файлом',
   link: 'ссылка <a href="blob:…" target="_blank">',
   nav: 'прямой переход по blob-ссылке',
-  download: 'скачивание',
-};
-export const calendarMode = () => {
-  const m = st.settings().calendarMode;
-  return m && (m === 'auto' || METHODS[m]) ? m : 'auto';
+  auto: 'скачивание программным кликом',
 };
 
 // ——— журнал и история попыток (localStorage, последние 5) ———
@@ -106,7 +105,7 @@ function viaNav(text) {
   window.location.href = url;
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
-export function downloadFile(text, name) {
+function viaAuto(text, name) {
   const url = blobUrl(text);
   const a = document.createElement('a');
   a.href = url;
@@ -129,56 +128,95 @@ async function step(method, text, name, title) {
     }
     if (method === 'link') viaLink(text);
     else if (method === 'nav') viaNav(text);
-    else downloadFile(text, name);
-    return { method, ok: true, note: method === 'download' ? 'файл отдан на скачивание' : 'браузер принял ссылку' };
+    else viaAuto(text, name);
+    return { method, ok: true, note: 'браузер принял ссылку' };
   } catch (e) {
     return { method, ok: false, error: errText(e), aborted: !!(e && e.name === 'AbortError') };
   }
 }
-
-const RESULT = { share: 'shared', link: 'opened', nav: 'opened', download: 'downloaded' };
+function save(entry) {
+  saveHistory([entry, ...diagHistory()]);
+  log(entry.steps.map((x) => METHODS[x.method] + ': ' + (x.ok ? 'без ошибки' : 'ошибка — ' + x.error)).join(' → '));
+  return entry;
+}
+const fileMeta = (text, name) => {
+  const issues = checkIcs(text);
+  return { file: name, bytes: new TextEncoder().encode(text).length, ics: issues.length ? issues.join('; ') : 'ok' };
+};
 
 /**
- * Передать .ics в календарь. Возвращает 'shared' | 'opened' | 'downloaded' | 'aborted'.
- * Вызывать прямо из обработчика нажатия: браузер разрешает «Поделиться» только сразу после действия.
- * opts.mode — способ для пробной попытки из «Диагностики»; иначе — из настроек.
+ * Ручная попытка из «Диагностики» одним способом: share | link | nav | auto (программный клик).
+ * По умолчанию эти способы не используются. Возвращает запись истории.
  */
-export async function deliverIcs(text, name, title = 'Событие', opts = {}) {
-  const mode = opts.mode || calendarMode();
+export async function tryMethod(mode, text, name, title = 'Событие') {
   const activation = navigator.userActivation ? navigator.userActivation.isActive : null;
-  const issues = checkIcs(text);
   lastBlobType = null;
-  const steps = [];
-  const run = async (m) => { const r = await step(m, text, name, title); steps.push(r); return r; };
-  let res = 'aborted';
-  if (mode === 'auto') {
-    const cap = capabilities(name);
-    const why = shareBlocker(cap);
-    let r = null;
-    if (why) steps.push({ method: 'share', ok: false, skipped: true, error: why });
-    else r = await run('share');
-    if (r && r.ok) res = 'shared';
-    else if (!(r && r.aborted)) {
-      const n = await run('nav');
-      if (n.ok) res = 'opened';
-      else if ((await run('download')).ok) res = 'downloaded';
-    }
-  } else {
-    const r = await run(mode);
-    if (r.ok) res = RESULT[mode];
-    else if (!r.aborted && mode !== 'download' && (await run('download')).ok) res = 'downloaded'; // не оставляем ни с чем
+  const r = await step(mode, text, name, title);
+  return save({
+    at: new Date().toISOString(), mode, method: mode, ok: !!r.ok, error: r.ok ? null : r.error,
+    steps: [r], activation, ...fileMeta(text, name), blobType: lastBlobType,
+  });
+}
+
+/**
+ * Основной способ: видимая ссылка-кнопка <a href="blob:…" download="…">. Её нажимает человек,
+ * поэтому загрузку не блокируют ни Chrome, ни Яндекс.Браузер. Нажатие записывается в историю:
+ * создан ли blob, было ли нажатие настоящим (isTrusted).
+ */
+export function calendarLink(text, name, { label = 'Добавить в Яндекс.Календарь', cls = '.btn.primary.block.big-action', source = '', onDone } = {}) {
+  let url;
+  const meta = fileMeta(text, name);
+  try {
+    url = blobUrl(text);
+  } catch (e) {
+    const err = errText(e);
+    save({ at: new Date().toISOString(), mode: 'download', method: 'download', ok: false, error: 'не удалось создать blob: ' + err, steps: [{ method: 'download', ok: false, error: 'не удалось создать blob: ' + err }], blobCreated: false, blobError: err, clicked: false, source, ...meta });
+    return h('p.cal-hint', 'Не удалось подготовить файл: ' + err);
   }
-  const last = steps[steps.length - 1];
-  const failed = steps.filter((x) => !x.ok && !x.skipped);
-  const entry = {
-    at: new Date().toISOString(), mode, method: last.method, ok: !!last.ok, result: res,
-    error: failed.length ? failed[failed.length - 1].error : null,
-    steps, activation, file: name, bytes: new TextEncoder().encode(text).length,
-    ics: issues.length ? issues.join('; ') : 'ok', blobType: lastBlobType,
+  const blobType = lastBlobType;
+  return h('a.cal-link' + cls, {
+    href: url, download: name, rel: 'noopener',
+    onclick: (e) => {
+      save({
+        at: new Date().toISOString(), mode: 'download', method: 'download', ok: true, error: null,
+        steps: [{ method: 'download', ok: true, note: 'blob создан, нажатие на ссылку' + (e.isTrusted ? '' : ' (не настоящее)') }],
+        blobCreated: true, clicked: true, trusted: e.isTrusted, source, ...meta, blobType,
+      });
+      // перерисовку — после того, как браузер начал загрузку по ссылке
+      if (onDone) setTimeout(onDone, 250);
+    },
+  }, icon('download', 20), label);
+}
+
+/** Заметный блок с шагами после скачивания. */
+export function stepsBlock() {
+  return h('div.cal-steps', { role: 'status' }, icon('check', 20), h('span', STEPS));
+}
+
+/** Файл события для задачи. Для закрытых областей в файле только «Встреча». */
+export function taskIcs(t, kind) {
+  const k = kind || calendarKind(t);
+  if (!k) return null;
+  const priv = st.isPrivate(t);
+  return {
+    text: buildIcs(t, { private: priv, kind: k, now: st.clock() }),
+    name: (priv ? 'vstrecha' : 'sobytie') + '-' + (t.date || t.deadline || '') + '.ics',
+    title: priv ? 'Встреча' : t.text,
   };
-  saveHistory([entry, ...diagHistory()]);
-  log(steps.map((x) => METHODS[x.method] + ': ' + (x.ok ? 'без ошибки' : (x.skipped ? 'пропущен — ' : 'ошибка — ') + x.error)).join(' → '));
-  return res;
+}
+
+/** Лист «Добавить в Яндекс.Календарь»: большая ссылка, после нажатия — шаги. */
+export function calendarSheet(t, { kind, done = false } = {}) {
+  const f = taskIcs(t, kind);
+  if (!f) return null;
+  let shown = done;
+  return sheet((api) => h('div',
+    h('p.muted', f.title + (t.date ? ' · ' + fmtDay(t.date, st.clock()) + (t.time ? ', ' + t.time : '') : '')),
+    shown ? stepsBlock() : null,
+    calendarLink(f.text, f.name, { label: shown ? 'Скачать файл ещё раз' : 'Добавить в Яндекс.Календарь', source: 'sheet', onDone: () => { shown = true; api.refresh(); } }),
+    h('p.muted.small.cal-hint', CHECK_HINT),
+    shown ? h('button.btn.block', { onclick: () => api.close() }, 'Готово') : null,
+  ), { title: 'Яндекс.Календарь' });
 }
 
 /** Пробная попытка из «Диагностики»: событие-проверка на завтра, 10:00. */
@@ -209,7 +247,15 @@ function uaShort() {
   return b + ', ' + os;
 }
 const stepText = (x) => METHODS[x.method] + ' — ' + (x.ok ? 'без ошибки' : (x.skipped ? 'пропущен: ' : 'ошибка: ') + x.error);
-const modeText = (m) => (m === 'auto' ? 'автоматически (share с файлом → прямой переход по blob-ссылке → скачивание)' : METHODS[m]);
+/** Факт последней попытки скачивания: дошло ли дело до blob и нажатия на ссылку. */
+function downloadFact(hist) {
+  const d = hist.find((x) => x.method === 'download');
+  if (!d) return 'Попытка скачивания: ещё не было (нажмите «Скачать пробный файл»)';
+  const blob = d.blobCreated === false ? 'нет — ' + (d.blobError || d.error)
+    : 'да (' + (d.blobType || '—') + ', ' + d.bytes + ' байт)';
+  const click = d.clicked ? 'да' + (d.trusted === false ? ', но не настоящее (isTrusted=false)' : ', настоящее (isTrusted=true)') : 'нет';
+  return 'Попытка скачивания (' + fmtAt(d.at) + '): blob создан — ' + blob + '; нажатие на ссылку — ' + click;
+}
 
 /** Текст экрана диагностики (он же копируется кнопкой). */
 export function diagText() {
@@ -221,25 +267,26 @@ export function diagText() {
     'Запущено как приложение: ' + (standalone ? 'да' : 'нет, во вкладке браузера'),
     'navigator.share: ' + cap.share,
     'navigator.canShare({files:[.ics]}): ' + (cap.canShareError ? 'ошибка — ' + cap.canShareError : tf(cap.canShareFiles)),
-    'Способ в настройках: ' + modeText(calendarMode()),
+    'Способ по умолчанию: скачивание по нажатию на ссылку <a href="blob:…" download>',
+    downloadFact(hist),
     '',
   ];
   if (!hist.length) {
-    lines.push('Попыток ещё не было. Нажмите «Пробная попытка».');
+    lines.push('Попыток ещё не было.');
     return lines.join('\n');
   }
   const l = hist[0];
   const lastErr = hist.find((x) => x.error);
   lines.push(
     'Последняя попытка: ' + fmtAt(l.at),
-    'Способ: ' + METHODS[l.method] + (l.mode === 'auto' ? ' (автоматически)' : l.mode === l.method ? ' (выбран вручную)' : ' (запасной; выбран: ' + METHODS[l.mode] + ')'),
+    'Способ: ' + METHODS[l.method],
     'Шаги: ' + l.steps.map(stepText).join(' → '),
     'Результат: ' + (l.ok ? 'без ошибки' : 'ошибка'),
     'На экране: ' + (l.seen ? SEEN[l.seen] : 'не отмечено'),
     'Текст последней ошибки: ' + (l.error || (lastErr ? 'в этой попытке нет; ранее (' + fmtAt(lastErr.at) + '): ' + lastErr.error : 'ошибок не было')),
     'Файл: ' + l.file + ', ' + l.bytes + ' байт, проверка .ics: ' + (l.ics === 'ok' ? 'корректен (CRLF, VCALENDAR/VEVENT, UID, PRODID, DTSTAMP, DTSTART, DTEND)' : l.ics),
     'Тип Blob: ' + (l.blobType || (l.method === 'share' ? 'не создавался (File ' + SHARE_TYPE + ')' : '—')),
-    'Нажатие ещё активно (userActivation): ' + (l.activation === true ? 'да' : l.activation === false ? 'нет' : 'недоступно'),
+    ...(l.method === 'download' ? [] : ['Нажатие ещё активно (userActivation): ' + (l.activation === true ? 'да' : l.activation === false ? 'нет' : 'недоступно')]),
     '',
     'История (последние ' + hist.length + '):',
   );
@@ -250,35 +297,15 @@ export function diagText() {
   return lines.join('\n');
 }
 
-/** .ics задачи. Для закрытых областей в файле только «Встреча». */
-export function sendToCalendar(t, { kind, toastHint = true } = {}) {
-  const k = kind || calendarKind(t);
-  if (!k) return Promise.resolve(null);
-  const priv = st.isPrivate(t);
-  const text = buildIcs(t, { private: priv, kind: k, now: st.clock() });
-  const name = (priv ? 'vstrecha' : 'sobytie') + '-' + (t.date || t.deadline || '') + '.ics';
-  return deliverIcs(text, name, priv ? 'Встреча' : t.text).then((r) => {
-    if (toastHint && HINTS[r]) toast(HINTS[r], { duration: 8000 });
-    return r;
-  });
-}
-
-/** Какой способ сработает — чтобы заранее дать точную подсказку в общем тосте (с «Отменить»). */
-export function expectedHint() {
-  const mode = calendarMode();
-  if (mode === 'download') return HINTS.downloaded;
-  if (mode === 'link' || mode === 'nav') return HINTS.opened;
-  if (!shareBlocker(capabilities())) return HINTS.shared;
-  return mode === 'share' ? HINTS.downloaded : HINTS.opened;
-}
-
 /**
- * Сразу после сохранения задачи со временем (пока это ещё действие пользователя).
- * Возвращает подсказку для тоста вызывающего или null, если календарь не предлагался.
+ * Сразу после сохранения задачи со временем: ссылка «В календарь» для тоста (с «Отменить»).
+ * Нажимает её человек — это обычная загрузка файла. Возвращает элемент или null.
  */
 export function offerCalendar(t) {
   if (!t || !autoCalendar() || !t.date || !t.time || t.status !== 'active' || (t.dateKind && t.dateKind !== 'day')) return null;
-  const hint = expectedHint();
-  sendToCalendar(t, { kind: 'time', toastHint: false });
-  return hint;
+  const f = taskIcs(t, 'time');
+  return calendarLink(f.text, f.name, {
+    label: 'В календарь', cls: '.toast-act.toast-link', source: 'toast',
+    onDone: () => { hideToast(); calendarSheet(t, { kind: 'time', done: true }); },
+  });
 }

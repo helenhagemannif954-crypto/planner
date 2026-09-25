@@ -8,7 +8,7 @@ import { describe as describeRepeat } from '../recur.js';
 import { app, isHidden, reveal, complete, reschedule, deadlineLabel, personLabel, hiddenArea } from './common.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize } from './pickers.js';
 import { describeOffset } from '../chain.js';
-import { calendarKind, sendToCalendar, HINTS, CHECK_HINT } from './calendar.js';
+import { calendarKind, calendarLink, calendarSheet, stepsBlock, taskIcs, CHECK_HINT } from './calendar.js';
 
 export function openTask(id) {
   let t = S.tasks.get(id);
@@ -197,11 +197,13 @@ export function openTask(id) {
 
     // «Добавить в календарь» — всегда видно у задачи с датой (или сроком), не спрятано в меню
     const calKind = calendarKind(t);
-    const calBox = calKind && !done ? h('div.cal-box',
-      h('button.btn.block', {
-        onclick: () => { sendToCalendar(S.tasks.get(id), { kind: calKind, toastHint: false }).then((r) => { calShown = r; s.refresh(); }); },
-      }, icon('cal', 18), 'Добавить в Яндекс.Календарь'),
-      calShown && HINTS[calShown] ? h('p.small.cal-hint', HINTS[calShown]) : null,
+    const calFile = calKind && !done ? taskIcs(t, calKind) : null;
+    const calBox = calFile ? h('div.cal-box',
+      calShown ? stepsBlock() : null,
+      calendarLink(calFile.text, calFile.name, {
+        label: calShown ? 'Скачать файл ещё раз' : 'Добавить в Яндекс.Календарь', cls: '.btn.block', source: 'task',
+        onDone: () => { calShown = true; s.refresh(); },
+      }),
       h('p.muted.small.cal-hint', CHECK_HINT)) : null;
 
     return h('div.form',
@@ -226,7 +228,7 @@ async function askFirstStep(id) {
 }
 
 export function icsFor(t) {
-  return sendToCalendar(t);
+  return calendarSheet(t);
 }
 
 // ——— цепочка ———

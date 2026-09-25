@@ -156,6 +156,14 @@ main#view { flex: 1; overflow-y: auto; overflow-x: hidden; padding: .25rem 1rem 
 .btn.danger { color: var(--over); }
 .btn.block { width: 100%; }
 .btn:disabled { opacity: .5; }
+a.btn { text-decoration: none; color: inherit; }
+a.toast-act { text-decoration: none; }
+a.btn.primary { color: var(--accent-ink); }
+.btn.block { box-sizing: border-box; }
+.toast-link { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.toast-link svg { width: 18px; height: 18px; }
+.cal-steps { display: flex; gap: .6rem; align-items: flex-start; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius); padding: .85rem 1rem; font-size: 1.05rem; line-height: 1.4; font-weight: 500; margin: .25rem 0; }
+.cal-steps svg { flex: none; margin-top: .1rem; }
 .row-btns { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .75rem; }
 .row-btns.end { justify-content: flex-end; }
 .input { width: 100%; min-height: var(--tap); border-radius: .75rem; border: 1px solid var(--line); background: var(--surface); padding: .6rem .8rem; outline: none; }
@@ -213,6 +221,10 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .toast-act { color: #9fe0cc; font-weight: 600; padding: .5rem .8rem; border-radius: 1rem; }
 .toast-msg { overflow: hidden; text-overflow: ellipsis; }
+.toast.wide { flex-wrap: wrap; width: calc(100% - 2rem); border-radius: 1.1rem; padding: .6rem .5rem .35rem 1.1rem; gap: .1rem .5rem; }
+.toast.wide .toast-msg { flex: 1 0 100%; white-space: normal; }
+.toast.wide .toast-link { margin-left: -.8rem; }
+.toast.wide .toast-act:last-child { margin-left: auto; }
 .update-bar { position: fixed; top: .5rem; left: 50%; transform: translateX(-50%); z-index: 90; background: var(--surface); box-shadow: var(--shadow); border-radius: 1.5rem; padding: .3rem .4rem .3rem 1rem; display: flex; gap: .5rem; align-items: center; font-size: .9rem; }
 
 /* ——— календарь и время ——— */

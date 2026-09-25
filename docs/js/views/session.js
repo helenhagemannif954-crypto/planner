@@ -5,7 +5,7 @@ import { S } from '../store.js';
 import { fmtDay, fmtLong, fmtShort, addDays, dow, DOW_SHORT, dateTime, hm, ymd } from '../dates.js';
 import { encodeSetup, sessionText, linkFor } from '../share.js';
 import { app, isHidden, askPin } from './common.js';
-import { deliverIcs, HINTS, CHECK_HINT } from './calendar.js';
+import { calendarLink, stepsBlock, CHECK_HINT } from './calendar.js';
 import { buildIcs } from '../ics.js';
 import { appBase } from './share.js';
 
@@ -72,18 +72,16 @@ export function openRecordForm() {
       h('h2', 'Записано'),
       h('p', { style: { fontSize: '1.1rem', margin: 0 } }, r.client),
       h('p.muted', { style: { margin: 0 } }, sessionText(r, '', st.clock()).replace(/^сессия [^—]*— /, '')),
-      h('button.btn.primary', {
-        style: { minHeight: '4rem', fontSize: '1.2rem', padding: '0 2rem', marginTop: '1rem' },
-        onclick: () => {
-          const ics = sessionIcs(r, st.clock());
-          deliverIcs(ics, 'sessiya-' + r.start.date + '.ics', 'Сессия').then((res) => {
-            if (res !== 'aborted') st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
-            calDone = res;
+      calDone ? h('div', { style: { maxWidth: '22rem', marginTop: '1rem' } }, stepsBlock()) : null,
+      h('div', { style: { marginTop: '1rem', width: '100%', maxWidth: '22rem' } },
+        calendarLink(sessionIcs(r, st.clock()), 'sessiya-' + r.start.date + '.ics', {
+          label: calDone ? 'Скачать файл ещё раз' : 'Добавить в Яндекс.Календарь', source: 'session',
+          onDone: () => {
+            st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
+            calDone = true;
             s.refresh();
-          });
-        },
-      }, icon('cal', 22), 'Добавить в Яндекс.Календарь'),
-      calDone && HINTS[calDone] ? h('p.cal-hint', { style: { maxWidth: '22rem' } }, HINTS[calDone]) : null,
+          },
+        })),
       h('p.muted.small.cal-hint', { style: { maxWidth: '22rem' } }, CHECK_HINT));
   }
 }
@@ -194,7 +192,7 @@ export function sessionScreen(obj) {
     const { offerCalendar } = await import('./calendar.js');
     const anchorT = (r.tasks || []).find((x) => x.isAnchor) || (r.tasks || [])[0];
     const cal = anchorT && offerCalendar(S.tasks.get(anchorT.id));
-    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : '') + (cal ? '. ' + cal : ''), { action: 'Отменить', onAction: () => r.undo(), duration: cal ? 10000 : undefined });
+    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : ''), { extra: cal, action: 'Отменить', onAction: () => r.undo(), duration: cal ? 12000 : undefined });
   }
 }
 
