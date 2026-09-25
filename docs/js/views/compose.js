@@ -9,6 +9,7 @@ import { describe as describeRepeat } from '../recur.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize, pickTemplate } from './pickers.js';
 import { findCode, decode } from '../share.js';
 import { app } from './common.js';
+import { offerCalendar, CAL_HINT } from './calendar.js';
 
 export function parseCtx() {
   return {
@@ -398,7 +399,10 @@ export async function createFromParse(m) {
   const r = st.addTask(fields);
   const t = r.result;
   const now = st.clock();
+  // сразу вслед за сохранением — системный выбор приложения для .ics (иначе браузер не разрешит)
+  const cal = offerCalendar(t);
   let where = m.done ? 'Записано в сделанное' : t.inbox ? 'Во «Входящие»' : t.date ? 'Добавлено: ' + dateLabel(t.date, t.dateKind, now) : 'Добавлено';
+  if (cal) where += ' · ' + CAL_HINT;
   toast(where, { action: 'Отменить', onAction: () => r.undo() });
   buzz(8);
   return { task: t, undo: r.undo, message: where, saved: r.saved };
@@ -452,7 +456,9 @@ export async function launchFromParse(m) {
     ], { text: 'Получается перегруз: ' + days.map((d) => fmtDay(d, st.clock())).join(', ') + '. Можно оставить — просто имейте в виду.' });
     if (v === 'undo') { await r.undo(); return null; }
   }
-  const msg = 'Цепочка: ' + (st.isPrivate({ areaId: r.group.areaId }) ? tpl.name : r.group.title);
+  let msg = 'Цепочка: ' + (st.isPrivate({ areaId: r.group.areaId }) ? tpl.name : r.group.title);
+  const anchorT = r.tasks.find((x) => x.isAnchor);
+  if (anchorT && offerCalendar(S.tasks.get(anchorT.id))) msg += ' · ' + CAL_HINT;
   toast(msg, { action: 'Отменить', onAction: () => r.undo() });
   buzz(8);
   return { group: r.group, undo: r.undo, message: msg, saved: r.saved };

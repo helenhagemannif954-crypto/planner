@@ -228,7 +228,7 @@ test('запись сессии: отдельный экран, наложени
   await expect(dlg).toContainText('Консультирование');
   // клиент закрытой области скрыт, пока не коснёшься
   await dlg.getByRole('button', { name: 'Показать клиента' }).click();
-  await expect(dlg).toContainText('А.К. · сессия №4');
+  await expect(dlg).toContainText('А.К. · А.К., сессия №4');
   await dlg.getByRole('button', { name: 'Добавить в план' }).click();
   await expect(page.getByText(/Молебен — пн 28\.09, 17:30–18:30/)).toBeVisible();
   await page.getByRole('button', { name: 'Изменить время' }).click();
@@ -259,7 +259,8 @@ test('запись сессии: при наложении можно «Доба
   await dlg.getByRole('button', { name: 'Добавить в план' }).click();
   await expect(page.getByText(/Молебен/)).toBeVisible();
   await page.getByRole('button', { name: 'Добавить всё равно' }).click();
-  await page.getByRole('button', { name: /Создать в «Консультирование»/ }).click();
+  await expect(page.getByRole('textbox', { name: 'Новый клиент' })).toHaveValue('Б.В.');
+  await page.getByRole('button', { name: 'Создать' }).click();
   const d = await dump(page);
   const p = d.data.people.find((x) => x.code === 'Б.В.');
   expect(d.data.areas.find((a) => a.id === p.areaId).private).toBe(true);

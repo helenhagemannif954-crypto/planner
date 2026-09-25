@@ -23,6 +23,8 @@ export function openSettings() {
         const v = await choose('Начало года', [{ label: '1 сентября — церковное новолетие, учебный год', value: 9 }, { label: '1 января', value: 1 }]);
         if (v) st.setSettings({ yearStart: v });
       }),
+      h('button.line-btn', { role: 'switch', 'aria-checked': String(cfg.autoCalendar !== false), onclick: () => st.setSettings({ autoCalendar: cfg.autoCalendar === false }) },
+        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу выбор приложения для .ics')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
       line('lock', 'PIN для закрытых областей', cfg.pinHash ? 'задан' : 'нет', () => pinSheet()),
       line('download', 'Резервная копия', st.meta('lastExport') ? fmtDay(st.meta('lastExport').slice(0, 10), st.clock()) : 'не было', () => backupSheet()),
       line('check', 'Журнал сделанного', null, () => journalSheet()),

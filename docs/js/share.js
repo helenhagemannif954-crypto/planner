@@ -32,7 +32,7 @@ export function sanitizeShared(o) {
     const pt = (x) => (x && typeof x === 'object' && isDate(x.date) ? { date: x.date, time: isTime(x.time) ? x.time : null } : null);
     const start = pt(o.start), end = pt(o.end);
     if (!start) return null;
-    return { kind: 'session', id, text: 'Сессия', from: str(o.from, LIM.name).trim(), client: str(o.client, 40).trim(), start, end };
+    return { kind: 'session', id, text: 'Сессия', from: str(o.from, LIM.name).trim(), client: str(o.client, 80).trim(), start, end };
   }
   if (o.kind === 'setup') {
     return { kind: 'setup', id, text: 'Настройка', from: str(o.from, LIM.name).trim(), recordSessions: o.recordSessions === true };

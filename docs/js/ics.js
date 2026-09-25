@@ -26,8 +26,9 @@ export function buildIcs(task, opts = {}) {
   const summary = priv ? 'Встреча' : (kind === 'deadline' ? 'Срок: ' : '') + task.text;
   let start, end, alarms;
   if (kind === 'time') {
+    // время — начало; без окончания событие-точка
     start = dateTime(task.date, task.time);
-    end = new Date(start.getTime() + (Number(task.dur) || 30) * 60000);
+    end = new Date(start.getTime() + (Number(task.dur) || 0) * 60000);
     alarms = ['-PT15M'];
   } else {
     const d = task.deadline || task.date;

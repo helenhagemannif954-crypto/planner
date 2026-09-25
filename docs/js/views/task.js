@@ -7,7 +7,6 @@ import { dateLabel, partLabel } from '../parse.js';
 import { describe as describeRepeat } from '../recur.js';
 import { app, isHidden, reveal, complete, reschedule, deadlineLabel, personLabel, hiddenArea } from './common.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize } from './pickers.js';
-import { buildIcs } from '../ics.js';
 import { describeOffset } from '../chain.js';
 
 export function openTask(id) {
@@ -173,7 +172,7 @@ export function openTask(id) {
     if (!done && !priv) more.push({ label: 'Отправить задачу', value: 'send', icon: 'send' });
     if (t.from && !priv && st.privateAreas().length) more.push({ label: 'Скрыть в закрытую область', value: 'hide', icon: 'lock' });
     if (t.from && done) more.push({ label: 'Сообщить, что сделано', value: 'report', icon: 'send' });
-    if ((t.time && t.date) || t.deadline) more.push({ label: 'В календарь телефона', value: 'ics', icon: 'cal' });
+    if ((t.time && t.date) || t.deadline) more.push({ label: 'В календарь', value: 'ics', icon: 'cal' });
     if ((cl.length || g)) more.push({ label: 'Сохранить как шаблон', value: 'tpl', icon: 'chain' });
     if (!showAll) more.push({ label: 'Все поля', value: 'all', icon: 'list' });
     more.push({ label: 'Удалить', value: 'del', icon: 'trash', danger: true });
@@ -216,17 +215,14 @@ async function askFirstStep(id) {
 }
 
 export async function icsFor(t) {
-  const priv = st.isPrivate(t);
   let kind = t.time && t.date ? 'time' : 'deadline';
   if (t.time && t.date && t.deadline) {
     const v = await choose('В календарь', [{ label: 'Время: ' + fmtShort(t.date) + ' ' + t.time, value: 'time' }, { label: 'Срок: ' + fmtShort(t.deadline), value: 'deadline' }]);
     if (!v) return;
     kind = v;
   }
-  const ics = buildIcs(t, { private: priv, kind, now: st.clock() });
-  const file = new File([ics], (priv ? 'vstrecha' : 'zadacha') + '.ics', { type: 'text/calendar' });
-  const r = await shareOut({ file, title: priv ? 'Встреча' : t.text });
-  if (r === 'downloaded') toast('Файл сохранён — откройте его, чтобы добавить в календарь');
+  const { sendToCalendar } = await import('./calendar.js');
+  await sendToCalendar(t, { kind });
 }
 
 // ——— цепочка ———

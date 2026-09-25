@@ -365,7 +365,7 @@ test('закрытая область: задачу нельзя отправи�
   await expect(page.getByText(/Закрытая область: задачу нельзя отправить/)).toBeVisible();
   await page.getByRole('button', { name: 'Ещё', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Отправить задачу' })).toHaveCount(0);
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'В календарь телефона' }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'В календарь', exact: true }).click()]);
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('SUMMARY:Встреча');
   expect(ics).not.toContain('клиентом');

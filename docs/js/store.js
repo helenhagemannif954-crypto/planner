@@ -100,7 +100,7 @@ export function flush() { return queue.catch(() => {}); }
 // ——— загрузка ———
 export const DEFAULT_SETTINGS = {
   myName: '', onboarded: false, contacts: [], capacity: [8, 8, 8, 8, 8, 6, 5],
-  church: { enabled: true, feast: 3, eve: 2, holy: 3 }, yearStart: 9, pinHash: null, pinSalt: null,
+  church: { enabled: true, feast: 3, eve: 2, holy: 3 }, yearStart: 9, pinHash: null, pinSalt: null, autoCalendar: true,
 };
 
 export async function load() {
@@ -676,9 +676,49 @@ export function spanMin(start, end) {
 }
 
 /** Куда ляжет запись сессии: контакт, область, человек, шаблон. */
+// ——— имя клиента от ассистента ———
+// Ассистент пишет клиента как привыкла (имя, фамилия). У меня клиенты — только коды; имена не храню
+// в открытом виде: для узнавания в следующий раз у человека лежит солёный отпечаток имени.
+export const normName = (s) => norm(s).replace(/[^\p{L}\d\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+function cyrb53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+export const nameMark = (name, salt) => cyrb53((salt || '') + '|' + normName(name));
+/** Инициалы имени: «Анна Кузнецова» → «АК». */
+export const initialsOf = (name) => normName(name).split(' ').filter(Boolean).map((w) => w[0]).join('').toUpperCase();
+export const suggestCode = (name) => { const i = initialsOf(name).slice(0, 3); return i ? i.split('').join('.') + '.' : ''; };
+
+/** Точное совпадение — привязка; похожие — выбор; иначе новый человек. */
+export function matchClient(name) {
+  const n = normName(name);
+  if (!n) return { exact: null, candidates: [] };
+  const people = [...S.people.values()].filter((p) => p.status !== 'archived');
+  const salt = settings().nameSalt;
+  const mark = salt ? nameMark(n, salt) : null;
+  const exact = people.find((p) => normName(p.code) === n || (mark && (p.aliases || []).includes(mark))) || null;
+  if (exact) return { exact, candidates: [] };
+  const ini = initialsOf(n);
+  const toks = n.split(' ').filter((x) => x.length >= 3);
+  const candidates = people.filter((p) => {
+    if (ini.length >= 2 && codeKey(p.code) === ini) return true;
+    const pt = normName(p.code).split(' ').filter((x) => x.length >= 3);
+    return toks.some((a) => pt.some((b) => a.startsWith(b) || b.startsWith(a)));
+  });
+  return { exact: null, candidates };
+}
+
 export function sessionTargets(obj) {
   const contact = contactByName(obj.from);
-  const person = obj.client ? findPersonByCode(obj.client) : null;
+  const match = matchClient(obj.client);
+  const person = match.exact;
   const anchored = templatesList().filter((t) => t.anchor);
   const byName = (list) => list.find((t) => /сесс|консульт/i.test(t.name + ' ' + (t.synonyms || []).join(' '))) || null;
   const areaId = (contact && contact.areaId) || null;
@@ -687,20 +727,26 @@ export function sessionTargets(obj) {
   const a = area(areaId);
   // новый клиент — всегда в закрытую область
   const privArea = (a && a.private && a) || (tpl && area(tpl.areaId) && area(tpl.areaId).private && area(tpl.areaId)) || privateAreas()[0] || null;
-  return { contact, areaId: areaId || (tpl && tpl.areaId) || (privArea && privArea.id) || null, person, tpl, privArea };
+  return { contact, areaId: areaId || (tpl && tpl.areaId) || (privArea && privArea.id) || null, person, candidates: match.candidates, tpl, privArea };
 }
 
 /**
  * Запись сессии сразу в план (минуя «Входящие»): якорь цепочки или задача со временем.
- * when = {start:{date,time}, end:{date,time}|null}; opts.createPerson — создать человека по коду.
+ * when = {start:{date,time}, end:{date,time}|null}; opts.personId — выбранный человек,
+ * opts.createCode — создать нового человека с моим кодом.
  */
 export function addSession(obj, when, opts = {}) {
   const tg = sessionTargets(obj);
   let out = null;
   const r = change(() => {
-    let p = tg.person;
-    if (!p && opts.createPerson && obj.client && tg.privArea) {
-      p = newPerson({ code: obj.client, areaId: tg.privArea.id, templateId: tg.tpl ? tg.tpl.id : null });
+    let p = opts.personId ? S.people.get(opts.personId) || null : tg.person;
+    // отпечаток имени, чтобы в следующий раз узнать клиента сразу
+    let salt = settings().nameSalt;
+    if (obj.client && !salt && (opts.personId || opts.createCode)) { salt = uid(); setMeta('settings', { ...settings(), nameSalt: salt }); }
+    const mark = obj.client && salt ? nameMark(obj.client, salt) : null;
+    if (p && opts.personId && mark && !(p.aliases || []).includes(mark)) { p = { ...p, aliases: [...(p.aliases || []), mark] }; put('people', p); }
+    if (!p && opts.createCode && tg.privArea) {
+      p = newPerson({ code: opts.createCode, areaId: tg.privArea.id, templateId: tg.tpl ? tg.tpl.id : null, aliases: mark ? [mark] : [] });
       put('people', p);
     }
     const dur = spanMin(when.start, when.end);

@@ -1,5 +1,5 @@
 // Быстрая запись сессии ассистентом и её приём: отдельный заметный экран, проверка наложений.
-import { h, icon, sheet, toast, choose, pickDate, pickTime, shareOut, quickDays, buzz } from '../ui.js';
+import { h, icon, sheet, toast, choose, prompt, pickDate, pickTime, shareOut, quickDays, buzz } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
 import { fmtDay, fmtLong, fmtShort, addDays, dow, DOW_SHORT, dateTime, hm, ymd } from '../dates.js';
@@ -27,7 +27,7 @@ export function openRecordForm() {
   }
 
   function formView() {
-    const client = h('input.input', { value: f.client, maxlength: 40, placeholder: 'Код или имя, например А.К.', autofocus: true, 'aria-label': 'Клиент', style: { fontSize: '1.15rem' } });
+    const client = h('input.input', { value: f.client, maxlength: 80, placeholder: 'Как вы его называете: имя, фамилия', autofocus: true, 'aria-label': 'Клиент', autocomplete: 'off', style: { fontSize: '1.15rem' } });
     client.addEventListener('input', () => { f.client = client.value; });
     const unsent = st.meta('recordedSessions', []).filter((r) => !r.sent).slice(0, 5);
     return h('div.form',
@@ -52,7 +52,7 @@ export function openRecordForm() {
   }
 
   function save() {
-    if (!f.client.trim()) { toast('Укажите код или имя клиента'); return; }
+    if (!f.client.trim()) { toast('Напишите, кто клиент'); return; }
     if (f.hasEnd && f.stime && f.etime && dateTime(f.ed, f.etime) <= dateTime(f.sd, f.stime)) { toast('Окончание должно быть позже начала'); return; }
     const to = targets.find((c) => c.id === f.to) || targets[0];
     const rec = {
@@ -100,7 +100,7 @@ export function sessionScreen(obj) {
   const when = (p) => (p ? fmtLong(p.date) + (p.time ? ', ' + p.time : '') : 'не указан');
   const s = sheet(() => {
     const p = tg.person;
-    const clientEl = shown ? h('b', obj.client || 'без кода') : h('button.masked', {
+    const clientEl = shown ? h('b', obj.client || 'не указан') : h('button.masked', {
       'aria-label': 'Показать клиента',
       onclick: async () => {
         const a = tg.privArea || areaObj;
@@ -112,7 +112,8 @@ export function sessionScreen(obj) {
       h('div.card.calm', { style: { margin: 0 } },
         h('div.muted.small', 'Запись сессии' + (obj.from ? ' от ' + obj.from : '')),
         h('dl.kv', { style: { fontSize: '1.05rem', marginTop: '.5rem' } },
-          h('dt', 'Клиент'), h('dd', clientEl, p && shown ? h('span.muted', ' · сессия №' + ((p.counter || 0) + 1)) : !p && obj.client && shown ? h('span.muted', ' · новый') : null),
+          h('dt', 'Клиент'), h('dd', clientEl, !shown ? null : p ? h('span.muted', ' · ' + p.code + ', сессия №' + ((p.counter || 0) + 1))
+            : tg.candidates.length ? h('span.muted', ' · похоже на: ' + tg.candidates.map((x) => x.code).join(', ')) : obj.client ? h('span.muted', ' · новый') : null),
           h('dt', 'Начало'), h('dd', when(obj.start)),
           h('dt', 'Конец'), h('dd', obj.end ? when(obj.end) : 'не указан'),
           h('dt', 'Область'), h('dd', areaObj ? [areaObj.private ? icon('lock', 14) : null, ' ' + areaObj.name] : '—'))),
@@ -155,20 +156,38 @@ export function sessionScreen(obj) {
         cur.end = { date: ymd(e), time: hm(e) };
       }
     }
-    let createPerson = false;
+    // кто это: точное совпадение имени — сразу; похожие — короткий выбор; иначе новый человек
+    const opts = {};
     if (!tg.person && obj.client && tg.privArea) {
-      const v = await choose('Новый клиент', [
-        { label: 'Создать в «' + tg.privArea.name + '»', value: 'create', primary: true },
-        { label: 'Добавить без карточки клиента', value: 'none' },
-      ], { text: 'Такого кода ещё нет. Клиент будет в закрытой области: только код или инициалы.' });
-      if (!v) return;
-      createPerson = v === 'create';
+      const lock = tg.privArea.pinLock && st.settings().pinHash;
+      if (lock && !shown && !(await askPin('Клиент'))) return;
+      let pick = 'new';
+      if (tg.candidates.length) {
+        const names = tg.candidates.map((p) => '«' + p.code + '»');
+        pick = await choose('Кто это?', [
+          ...tg.candidates.map((p) => ({ label: 'Это ' + p.code, value: p.id, hint: 'сессия №' + ((p.counter || 0) + 1) })),
+          { label: 'Новый человек', value: 'new' },
+        ], { text: 'Имя «' + obj.client + '» похоже на ' + (names.length > 1 ? names.slice(0, -1).join(', ') + ' или ' + names[names.length - 1] : names[0]) + '.' });
+        if (!pick) return;
+      }
+      if (pick === 'new') {
+        const code = await prompt('Новый клиент', st.suggestCode(obj.client), {
+          text: '«' + obj.client + '» — новый человек в «' + tg.privArea.name + '». Как отметить его у себя? Код или инициалы — только для вас, ' + (obj.from || 'ассистенту') + ' их знать не нужно.',
+          placeholder: 'Например: А.К.', max: 20, ok: 'Создать',
+        });
+        if (code === null) return;
+        if (code) opts.createCode = code;
+      } else opts.personId = pick;
     }
-    const r = st.addSession(obj, cur, { createPerson });
+    const r = st.addSession(obj, cur, opts);
     buzz(10);
     s.close();
     const label = r.group ? (st.isPrivate({ areaId: r.group.areaId }) ? r.group.templateName : r.group.title) : 'Сессия';
-    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : ''), { action: 'Отменить', onAction: () => r.undo() });
+    // и сразу — в общий календарь (для закрытой области там будет просто «Встреча»)
+    const { offerCalendar, CAL_HINT } = await import('./calendar.js');
+    const anchorT = (r.tasks || []).find((x) => x.isAnchor) || (r.tasks || [])[0];
+    const cal = anchorT && offerCalendar(S.tasks.get(anchorT.id));
+    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : '') + (cal ? ' · ' + CAL_HINT : ''), { action: 'Отменить', onAction: () => r.undo() });
   }
 }
 
@@ -186,7 +205,7 @@ export function setupScreen(obj) {
   choose(from + ' просит записывать ему сессии', [
     { label: obj.recordSessions ? 'Включить «Записать сессию»' : 'Выключить', value: true, primary: true },
     { label: 'Не сейчас', value: false },
-  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: код клиента, начало и окончание — и одна кнопка «Отправить».' }).then((v) => {
+  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: кто клиент, начало и окончание — и одна кнопка «Отправить».' }).then((v) => {
     if (!v) return;
     const contacts = [...(st.settings().contacts || [])];
     const c = st.contactByName(from);
