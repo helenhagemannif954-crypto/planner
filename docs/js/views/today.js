@@ -17,6 +17,10 @@ export function renderToday(root) {
   const T = st.T();
   const now = st.clock();
   const nowMin = now.getHours() * 60 + now.getMinutes();
+  // у ассистента — крупный пункт «Записать сессию»
+  if ((st.settings().contacts || []).some((c) => c.iRecord)) {
+    root.append(h('button.btn.primary.block.big-action', { onclick: async () => { (await import('./session.js')).openRecordForm(); } }, icon('plus', 22), 'Записать сессию'));
+  }
   const card = pickCard();
   if (card) root.append(card);
 
@@ -51,7 +55,8 @@ export function renderToday(root) {
     root.append(list);
     for (const b of blocksNext) {
       const a = st.area(b.areaId);
-      root.append(h('div.t-meta', { style: { margin: '.4rem .5rem' } }, h('span.m', icon('clock', 14), b.start + '–' + b.end + ' · ' + (b.title || (a ? a.name : 'Блок')))));
+      const when = b.cont ? 'до ' + b.end : b.explicit ? b.start + '–' + (b.cut ? 'завтра ' : '') + b.end : b.start;
+      root.append(h('div.t-meta', { style: { margin: '.4rem .5rem' } }, h('span.m', icon('clock', 14), when + ' · ' + (b.title || (a ? a.name : 'Блок')))));
     }
   }
   const laterCount = later.length + weekTasks.length;

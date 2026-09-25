@@ -106,7 +106,8 @@ let armed = false; // есть ли в истории наша запись дл
 let ignorePops = 0;
 export function sheet(build, opts = {}) {
   // тост с «Отменить» не прячем, а поднимаем наверх, чтобы не закрывал лист
-  if (toastEl) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + 3.6rem)'; toastEl.style.bottom = 'auto'; }
+  if (opts.full) hideToast(); // отдельный экран — прежний тост к нему не относится
+  else if (toastEl) { toastEl.style.top = 'calc(env(safe-area-inset-top, 0px) + 3.6rem)'; toastEl.style.bottom = 'auto'; }
   const overlay = h('div.overlay' + (opts.full ? '.full' : ''));
   const panel = h('div.sheet' + (opts.full ? '.full' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-label': opts.title || '' });
   const body = h('div.sheet-body');

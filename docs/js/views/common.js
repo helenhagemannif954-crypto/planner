@@ -121,10 +121,14 @@ export function taskRow(t, opts = {}) {
     'aria-label': done ? 'Вернуть' : 'Готово',
     onclick: (e) => { e.stopPropagation(); if (done) undone(t); else complete(t, row); },
   }, h('span.box', icon('check')));
+  // «Скрыть»: пришедшую не туда задачу — одним касанием в закрытую область
+  const hideBtn = opts.hideIncoming && t.from && !done && !st.isPrivate(t) && st.privateAreas().length
+    ? h('button.chip.small.hide-btn', { 'aria-label': 'Скрыть', onclick: (e) => { e.stopPropagation(); hideIncoming(t); } }, icon('lock', 14), 'Скрыть') : null;
   const inner = h('div.row-inner',
     check,
     h('div.t-main', t.star && !done && !opts.hideStar ? h('span.star-mark', '★ ') : null, title, meta.length ? h('div.t-meta', meta) : null),
-    t.time && !opts.hideTime ? h('span.t-time', t.time) : null);
+    t.time && !opts.hideTime ? h('span.t-time', t.time) : null,
+    hideBtn);
   const row = h('div.row' + (done ? '.is-done' : '') + (t.isAnchor ? '.anchor' : '') + (app.selection && app.selection.has(t.id) ? '.selected' : ''), { dataset: { id: t.id } }, inner);
   swipeable(row, {
     onRight: done || opts.noSwipe ? null : () => complete(t, row),
@@ -137,6 +141,19 @@ export function taskRow(t, opts = {}) {
     },
   });
   return row;
+}
+
+export async function hideIncoming(t) {
+  const list = st.privateAreas();
+  if (!list.length) { toast('Нет закрытой области'); return; }
+  let areaId = list[0].id;
+  if (list.length > 1) {
+    areaId = await choose('Скрыть в закрытую область', list.map((a) => ({ label: a.name, value: a.id, icon: 'lock' })));
+    if (!areaId) return;
+  }
+  app.revealed.delete(t.id);
+  const r = st.hideTask(t.id, areaId);
+  toast('Скрыто', { action: 'Отменить', onAction: () => r.undo() });
 }
 
 export function deadlineLabel(d) {

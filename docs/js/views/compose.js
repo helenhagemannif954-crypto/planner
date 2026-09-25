@@ -7,6 +7,7 @@ import { fmtDay, addDays, weekStart } from '../dates.js';
 import { describe as describeRepeat } from '../recur.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize, pickTemplate } from './pickers.js';
 import { findCode, decode } from '../share.js';
+import { app } from './common.js';
 
 export function parseCtx() {
   return {
@@ -136,18 +137,20 @@ export function composer(mode = 'inline', opts = {}) {
 
   // ——— голос ———
   let rec = null;
-  function listen() {
+  async function listen() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      state.hint = 'Распознавание речи здесь недоступно — нажмите микрофон на клавиатуре и продиктуйте.';
-      state.open = true; root.classList.add('open');
-      renderExtra();
-      input.focus();
+    const say = (hint) => { state.hint = hint; state.open = true; root.classList.add('open'); renderExtra(); input.focus(); };
+    if (!SR) { say('Распознавание речи здесь недоступно — нажмите микрофон на клавиатуре и продиктуйте.'); return; }
+    if (state.listening && rec) { rec.stop(); return; }
+    // распознавание на устройстве, если браузер его умеет; в закрытой области — только оно
+    const local = await localSpeech(SR);
+    if (!local && privateContext()) {
+      say('В закрытой области голос не уходит в интернет, а распознавания на устройстве здесь нет. Продиктуйте с клавиатуры в офлайн-режиме или напишите.');
       return;
     }
-    if (state.listening && rec) { rec.stop(); return; }
     try {
       rec = new SR();
+      if (local) rec.processLocally = true;
       rec.lang = 'ru-RU';
       rec.interimResults = true;
       rec.continuous = false;
@@ -175,6 +178,17 @@ export function composer(mode = 'inline', opts = {}) {
       state.hint = 'Голос не запустился — нажмите микрофон на клавиатуре.';
       renderExtra();
     }
+  }
+
+  function privateContext() {
+    const priv = (id) => { const a = st.area(id); return !!(a && a.private); };
+    if (opts.privateOnly) return true;
+    if (app.screen === 'area' && priv(app.areaId)) return true;
+    if (!state.text.trim()) return false;
+    const m = merged(state);
+    const tpl = m.templateId && S.templates.get(m.templateId);
+    const p = m.personId && S.people.get(m.personId);
+    return priv(m.areaId) || !!(tpl && priv(tpl.areaId)) || !!(p && priv(p.areaId));
   }
 
   // ——— сохранение ———
@@ -208,6 +222,16 @@ export function composer(mode = 'inline', opts = {}) {
   root.setText = (t) => { input.value = t; state.text = t; autosize(); state.open = true; root.classList.add('open'); renderExtra(); };
   if (mode === 'full') setTimeout(renderExtra, 0);
   return root;
+}
+
+/** Доступно ли распознавание речи прямо на устройстве (без отправки звука). */
+export async function localSpeech(SR) {
+  try {
+    if (SR && typeof SR.available === 'function') {
+      return (await SR.available({ langs: ['ru-RU'], processLocally: true })) === 'available';
+    }
+  } catch { /* нет поддержки */ }
+  return false;
 }
 
 function chipsFor(m) {
@@ -257,7 +281,8 @@ export async function createFromParse(m) {
       else st.setStar(v, false);
     }
   }
-  if (fields.size === 'L' && !m.done) {
+  // первый шаг — для большого дела, а не для встречи со временем
+  if (fields.size === 'L' && !m.done && !fields.time) {
     const step = await prompt('Большая задача', '', { text: 'Какой первый маленький шаг? (можно пропустить)', placeholder: 'Например: набросать план', ok: 'Готово' });
     if (step) fields.checklist = [{ id: st.uid(), text: step, done: false }];
   }

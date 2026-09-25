@@ -145,6 +145,7 @@ function drawSelection() {
 
 async function menu() {
   const v = await choose('Меню', [
+    ...((st.settings().contacts || []).some((c) => c.iRecord) ? [{ label: 'Записать сессию', value: 'record', icon: 'plus' }] : []),
     { label: 'Недельный обзор', value: 'review', icon: 'list' },
     { label: 'Разбор по квадратам', value: 'matrix', icon: 'grid' },
     { label: 'Что сейчас?', value: 'now', icon: 'clock' },
@@ -168,6 +169,7 @@ async function menu() {
     (await import('./views/matrix.js')).openMatrix(ids);
   }
   if (v === 'review') (await import('./views/review.js')).openReview();
+  if (v === 'record') (await import('./views/session.js')).openRecordForm();
 }
 
 // ——— только ввод (ярлыки «Добавить» и «Голосом») ———

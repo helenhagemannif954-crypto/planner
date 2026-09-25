@@ -7,6 +7,7 @@ import {
   DOW_SHORT, MONTHS_NOM, MONTHS, daysInMonth, mkDate, addMonths, parseYmd,
 } from '../dates.js';
 import { churchDay, churchYear } from '../church.js';
+import { hhmm } from '../blocks.js';
 import { app, taskRow, sectionHead, isHidden, deadlineLabel } from './common.js';
 
 const cap = (x) => x[0].toUpperCase() + x.slice(1);
@@ -62,44 +63,51 @@ function renderDay(root, d, head) {
 
   const blocks = st.blocksOn(d);
   const all = [...S.tasks.values()].filter((t) => !t.deletedAt && t.status !== 'someday' && !t.waitFor && t.date === d && (t.dateKind === 'day' || !t.dateKind));
-  const timed = all.filter((t) => t.time);
+  // время задачи — начало; окончание необязательно (без него задача — точка на ленте)
+  const timed = st.timedOn(d, { activeOnly: false });
   const untimed = st.sortTasks(all.filter((t) => !t.time && t.status === 'active'));
-  const starts = [...blocks.map((b) => toMin(b.start)), ...timed.map((t) => toMin(t.time))];
-  const ends = [...blocks.map((b) => toMin(b.end)), ...timed.map((t) => toMin(t.time) + st.taskMin(t))];
+  const starts = [...blocks.map((b) => toMin(b.start)), ...timed.map((x) => x.a)];
+  const ends = [...blocks.map((b) => toMin(b.end)), ...timed.map((x) => Math.max(x.b, x.a + 30))];
   const from = Math.min(7 * 60, ...starts.map((x) => Math.floor(x / 60) * 60));
-  const to = Math.max(22 * 60, ...ends.map((x) => Math.ceil(x / 60) * 60));
+  const to = Math.min(1440, Math.max(22 * 60, ...ends.map((x) => Math.ceil(x / 60) * 60)));
   const tl = h('div.timeline', { style: { height: (to - from) * PX + 'px' } });
   for (let m = from; m <= to; m += 60) {
-    tl.append(h('div.tl-line', { style: { top: (m - from) * PX + 'px' } }), h('div.tl-hour', { style: { top: (m - from) * PX + 'px' } }, fromMin(m)));
+    tl.append(h('div.tl-line', { style: { top: (m - from) * PX + 'px' } }), h('div.tl-hour', { style: { top: (m - from) * PX + 'px' } }, hhmm(m)));
   }
-  // раскладка по дорожкам при пересечениях
+  // раскладка по дорожкам при пересечениях (точка занимает место только под подпись)
+  const POINT = 26 / PX;
   const items = [
     ...blocks.map((b) => ({ kind: 'block', a: toMin(b.start), b: toMin(b.end), b0: b })),
-    ...timed.map((t) => ({ kind: 'task', a: toMin(t.time), b: toMin(t.time) + st.taskMin(t), t })),
+    ...timed.map((x) => ({ kind: 'task', a: x.a, b: x.b, t: x.t, point: x.b <= x.a, cont: x.cont, cut: x.cut })),
   ].sort((x, y) => x.a - y.a);
   const lanes = [];
   for (const it of items) {
+    const vis = Math.max(it.b, it.a + POINT);
     let i = lanes.findIndex((end) => end <= it.a);
     if (i < 0) { i = lanes.length; lanes.push(0); }
-    lanes[i] = it.b;
+    lanes[i] = vis;
     it.lane = i;
   }
   const nl = Math.max(1, lanes.length);
   for (const it of items) {
     const style = {
-      top: (it.a - from) * PX + 'px', height: Math.max(26, (it.b - it.a) * PX - 2) + 'px',
+      top: (it.a - from) * PX + 'px', height: (it.point ? 26 : Math.max(26, (it.b - it.a) * PX - 2)) + 'px',
       left: `calc(.4rem + ${(it.lane / nl) * 100}%)`, right: 'auto', width: `calc(${100 / nl}% - .5rem)`,
     };
     if (it.kind === 'block') {
-      const a = st.area(it.b0.areaId);
-      tl.append(h('div.tl-item.block', { style }, h('span', it.b0.start + ' ' + (it.b0.title || (a ? a.name : 'Блок')))));
+      const g = it.b0;
+      const a = st.area(g.areaId);
+      const name = g.title || (a ? a.name : 'Блок');
+      const label = g.cont ? '… ' + name + ' — до ' + g.end : g.start + ' ' + name + (g.cut ? ' → на следующий день' : '');
+      tl.append(h('div.tl-item.block', { style }, h('span', label)));
     } else {
       const t = it.t;
       const a = st.area(t.areaId);
       if (a) style.borderLeftColor = a.color;
-      tl.append(h('button.tl-item' + (t.isAnchor ? '.anchor' : '') + (t.status === 'done' ? '.done' : ''), {
-        style, onclick: () => app.openTask(t.id),
-      }, h('span', t.time + ' ' + (isHidden(t) ? '•••' : t.text))));
+      const text = isHidden(t) ? '•••' : t.text;
+      tl.append(h('button.tl-item' + (it.point ? '.point' : '') + (t.isAnchor ? '.anchor' : '') + (t.status === 'done' ? '.done' : ''), {
+        style, onclick: () => app.openTask(t.id), 'aria-label': (it.point ? 'в ' : '') + t.time + ' ' + text,
+      }, it.point ? h('i.pt') : null, h('span', (it.cont ? '… ' : t.time + ' ') + text)));
     }
   }
   // свободные окна
@@ -211,7 +219,7 @@ function renderWeek(root, d, head) {
     const cd = churchDay(day);
     const f = cd.feasts.find((x) => x.kind !== 'memorial') || null;
     const items = [];
-    for (const b of st.blocksOn(day)) items.push({ tm: b.start, text: b.title || (st.area(b.areaId) || {}).name || 'Блок', block: true });
+    for (const b of st.blocksOn(day)) items.push({ tm: b.cont ? '…' : b.start, text: (b.title || (st.area(b.areaId) || {}).name || 'Блок') + (b.cont ? ' — до ' + b.end : b.cut ? ' →' : ''), block: true });
     const tasks = [...S.tasks.values()].filter((t) => !t.deletedAt && t.status === 'active' && !t.waitFor && t.date === day && t.dateKind === 'day' && (!t.groupId || t.isAnchor || ns.get(t.groupId) === t || t.time));
     for (const t of st.sortTasks(tasks)) items.push({ tm: t.time || '', text: isHidden(t) ? '•••' : t.text, t });
     items.sort((a, b) => (a.tm || '99') < (b.tm || '99') ? -1 : 1);

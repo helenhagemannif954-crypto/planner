@@ -121,6 +121,7 @@ export function editArea(id) {
           if (d) save({ endDate: d.date });
         },
       }, icon('flag', 20), h('span.grow', 'Дата окончания'), h('span.val', a.endDate ? fmtDay(a.endDate, st.clock()) : 'нет')),
+      h('div.field', h('label', 'Постоянный блок без окончания длится'), h('div.chips.wrap', [30, 60, 90, 120, 180, 240].map((m) => h('button.chip.small' + ((Number(a.blockDur) || 60) === m ? '.on' : ''), { onclick: () => save({ blockDur: m }) }, m < 60 ? m + ' мин' : m / 60 + ' ч')))),
       h('div.field', h('label', 'Ключевые слова для быстрого ввода (через запятую)'), syn),
       h('div.row-btns',
         a.archived ? h('button.btn', { onclick: () => { save({ archived: false }); toast('Возвращена из архива'); } }, 'Вернуть из архива')
@@ -303,7 +304,9 @@ export function editTemplate(tpl, isNew) {
             [['every', 'Каждый раз'], ['first', 'Только первый раз'], ['nth', 'Каждый N-й раз']].map(([k, l]) => h('button.chip.small' + ((stp.rule || { kind: 'every' }).kind === k ? '.on' : ''), { onclick: () => { stp.rule = k === 'nth' ? { kind: 'nth', n: (stp.rule && stp.rule.n) || 3 } : { kind: k }; s.refresh(); } }, l)))),
           stp.rule && stp.rule.kind === 'nth' ? h('div.field', h('label', 'N (по счётчику человека)'), ruleN) : null,
           h('div.field', h('label', 'Контекст'), h('div.chips.wrap', [null, ...st.contexts()].map((c) => h('button.chip.small' + ((stp.ctx || null) === (c ? c.id : null) ? '.on' : ''), { onclick: () => { stp.ctx = c ? c.id : null; s.refresh(); } }, c ? c.name : 'нет')))),
-          h('div.field', h('label', 'Заготовка'), draft),
+          h('div.field', h('div.section-h', { style: { margin: 0 } }, h('span', 'Заготовка'), h('span.grow'),
+            h('button.chip.small', { onclick: async () => { const { copyText } = await import('../ui.js'); const ok = await copyText(draft.value); toast(ok ? 'Скопировано' : 'Не удалось скопировать'); } }, icon('copy', 14), 'Скопировать')),
+            draft, a && a.private ? h('div.muted.small', 'Общий текст шаблона, без данных клиента: его можно копировать отсюда.') : null),
           h('div.row-btns',
             h('button.btn', { disabled: i === 0, onclick: () => { d.steps.splice(i - 1, 0, d.steps.splice(i, 1)[0]); s.refresh(); } }, icon('up', 16)),
             h('button.btn', { disabled: i === d.steps.length - 1, onclick: () => { d.steps.splice(i + 1, 0, d.steps.splice(i, 1)[0]); s.refresh(); } }, icon('down', 16)),

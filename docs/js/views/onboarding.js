@@ -1,7 +1,7 @@
 // Первый запуск — не дольше двух минут: имя, контакты, взгляд на области, постоянные блоки.
 import { h, icon, clear } from '../ui.js';
 import * as st from '../store.js';
-import { DOW_SHORT } from '../dates.js';
+import { describeBlock } from '../blocks.js';
 
 export function onboarding(root, onDone) {
   let step = 0;
@@ -48,7 +48,7 @@ export function onboarding(root, onDone) {
       const blocks = st.meta('blocks', []);
       box.append(h('h1', 'Постоянные блоки'),
         h('p.muted', 'Службы, приёмы, пары — что повторяется каждую неделю. Можно пропустить и добавить позже.'),
-        h('div', blocks.map((b) => h('div.line-btn', h('span.grow', b.title, h('div.muted.small', DOW_SHORT[b.dow - 1] + ' ' + b.start + '–' + b.end))))),
+        h('div', blocks.map((b) => h('div.line-btn', h('span.grow', b.title, h('div.muted.small', describeBlock(b, st.blockDur(b.areaId))))))),
         h('button.btn', { onclick: async () => { const { addBlock } = await import('./settings.js'); await addBlock(); draw(); } }, icon('plus', 18), 'Добавить блок'),
         h('div.grow'),
         h('button.btn.primary.block', { onclick: finish }, 'Готово'));

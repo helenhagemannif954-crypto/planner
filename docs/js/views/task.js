@@ -136,10 +136,15 @@ export function openTask(id) {
     if (t.draft || t.draftSlot || showAll) {
       const ta = h('textarea.input', { value: t.draft || '', maxlength: 8000, placeholder: 'Текст-заготовка (промт, письмо, сообщение)', 'aria-label': 'Заготовка' });
       ta.addEventListener('change', () => upd({ draft: ta.value }));
+      // из закрытой области заготовка наружу не копируется: в ней могут быть данные задачи
+      const privDraft = st.isPrivate(t);
+      const tpl = g ? S.templates.get(g.templateId) : null;
       draft = h('div.section',
         h('div.section-h', h('span', 'Заготовка'), h('span.grow'),
-          h('button.chip.small', { onclick: async () => { const ok = await copyText(ta.value); toast(ok ? 'Скопировано' : 'Не удалось скопировать'); } }, icon('copy', 16), 'Скопировать')),
-        ta);
+          privDraft ? null : h('button.chip.small', { onclick: async () => { const ok = await copyText(ta.value); toast(ok ? 'Скопировано' : 'Не удалось скопировать'); } }, icon('copy', 16), 'Скопировать')),
+        ta,
+        privDraft ? h('p.muted.small', icon('lock', 14), ' Из закрытой области заготовка не копируется наружу.',
+          tpl && !tpl.deletedAt ? h('button.chip.small', { style: { marginLeft: '.4rem' }, onclick: async () => { const { editTemplate } = await import('./areas.js'); editTemplate(structuredClone(tpl), false); } }, 'Общий текст — в шаблоне') : null) : null);
     }
 
     const info = [];
@@ -166,6 +171,7 @@ export function openTask(id) {
     }, t.star ? '★ Главное' : '☆ Главное'));
     const more = [];
     if (!done && !priv) more.push({ label: 'Отправить задачу', value: 'send', icon: 'send' });
+    if (t.from && !priv && st.privateAreas().length) more.push({ label: 'Скрыть в закрытую область', value: 'hide', icon: 'lock' });
     if (t.from && done) more.push({ label: 'Сообщить, что сделано', value: 'report', icon: 'send' });
     if ((t.time && t.date) || t.deadline) more.push({ label: 'В календарь телефона', value: 'ics', icon: 'cal' });
     if ((cl.length || g)) more.push({ label: 'Сохранить как шаблон', value: 'tpl', icon: 'chain' });
@@ -178,6 +184,7 @@ export function openTask(id) {
         else if (v === 'send') { const { sendTask } = await import('./share.js'); sendTask(S.tasks.get(id)); }
         else if (v === 'report') { const { reportDone } = await import('./share.js'); reportDone(S.tasks.get(id)); }
         else if (v === 'ics') icsFor(S.tasks.get(id));
+        else if (v === 'hide') { const { hideIncoming } = await import('./common.js'); await hideIncoming(S.tasks.get(id)); api.close(); }
         else if (v === 'tpl') { const { editTemplate } = await import('./areas.js'); editTemplate(st.templateDraftFrom(S.tasks.get(id)), true); }
         else if (v === 'del') {
           if (t.isAnchor && g) { api.close(); cancelAnchorFlow(g.id); return; }

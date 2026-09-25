@@ -8,6 +8,7 @@ import { nextDate } from './recur.js';
 import { instantiate, reanchor, suggestOffsets, groupTitle } from './chain.js';
 import { churchReduction } from './church.js';
 import { norm, codeKey } from './parse.js';
+import { segmentsOn } from './blocks.js';
 
 export const S = { tasks: new Map(), areas: new Map(), people: new Map(), templates: new Map(), groups: new Map(), meta: {} };
 export const SIZE_MIN = { S: 15, M: 60, L: 180 };
@@ -544,9 +545,28 @@ export function templateDraftFrom(source) {
 export function saveTemplate(tpl) { return change(() => put('templates', { ...tpl })); }
 
 // ——— нагрузка ———
+/** Части постоянных блоков на дату (многодневный блок даёт часть на каждый затронутый день). */
 export function blocksOn(d) {
-  return meta('blocks', []).filter((b) => Number(b.dow) === dow(d)).sort((a, b) => (a.start < b.start ? -1 : 1));
+  return segmentsOn(meta('blocks', []), dow(d), (b) => blockDur(b.areaId));
 }
+/** Длительность блока без окончания — по умолчанию для области (изначально 1 час). */
+export const blockDur = (areaId) => Number((area(areaId) || {}).blockDur) || 60;
+
+/** Задачи со временем на дату: [{t, a, b}] в минутах суток; без окончания — точка (a === b). */
+export function timedOn(d, { activeOnly = true } = {}) {
+  const res = [];
+  const prev = addDays(d, -1);
+  for (const t of S.tasks.values()) {
+    if (t.deletedAt || !t.time || t.waitFor || t.status === 'someday') continue;
+    if (activeOnly && t.status !== 'active') continue;
+    if (t.dateKind && t.dateKind !== 'day') continue;
+    const a = toMin(t.time), dur = Number(t.dur) || 0;
+    if (t.date === d) res.push({ t, a, b: Math.min(a + dur, 1440), cut: a + dur > 1440 });
+    else if (t.date === prev && a + dur > 1440) res.push({ t, a: 0, b: a + dur - 1440, cont: true });
+  }
+  return res.sort((x, y) => x.a - y.a);
+}
+
 export function capacityOf(d) {
   const st = settings();
   const base = Number((st.capacity || [])[dow(d) - 1] ?? 8);
@@ -555,7 +575,7 @@ export function capacityOf(d) {
 }
 export function loadOf(d) {
   let m = 0;
-  for (const b of blocksOn(d)) m += Math.max(0, toMin(b.end) - toMin(b.start));
+  for (const b of blocksOn(d)) m += b.min;
   for (const t of S.tasks.values()) {
     if (t.deletedAt || t.status === 'someday' || t.waitFor) continue;
     if (t.status === 'done' && !(t.date === d)) continue;
@@ -582,10 +602,8 @@ export function overloadFor(tasks) {
 export function freeWindows(d, from = '07:00', to = '22:00') {
   const busy = [];
   for (const b of blocksOn(d)) busy.push([toMin(b.start), toMin(b.end)]);
-  for (const t of S.tasks.values()) {
-    if (t.deletedAt || t.status !== 'active' || t.date !== d || !t.time) continue;
-    busy.push([toMin(t.time), toMin(t.time) + taskMin(t)]);
-  }
+  // время задачи — начало; без окончания задача — точка и времени не занимает
+  for (const x of timedOn(d)) if (x.b > x.a) busy.push([x.a, x.b]);
   busy.sort((a, b) => a[0] - b[0]);
   let cur = toMin(from);
   const end = toMin(to);
@@ -603,9 +621,121 @@ export function freeWindows(d, from = '07:00', to = '22:00') {
   return res.filter(([a, b]) => b - a >= 30).map(([a, b]) => ({ start: fromMin(a), end: fromMin(b), min: b - a }));
 }
 
+/**
+ * С чем пересекается период (начало — обязательно, конец — нет; без конца это точка).
+ * Возвращает [{kind:'block'|'task', label, date, start, end}].
+ */
+export function overlapsFor(startDate, startTime, endDate, endTime, { exclude = [] } = {}) {
+  const S0 = dateTime(startDate, startTime || '00:00').getTime();
+  let E0 = endDate || endTime ? dateTime(endDate || startDate, endTime || startTime || '23:59').getTime() : S0;
+  if (E0 < S0) E0 = S0;
+  const hits = [];
+  const hit = (a, b) => (E0 > S0 ? (b > a ? a < E0 && b > S0 : a >= S0 && a < E0) : (b > a ? S0 >= a && S0 < b : S0 === a));
+  const seen = new Set();
+  for (let d = startDate, i = 0; d <= today(new Date(E0)) && i < 8; d = addDays(d, 1), i++) {
+    const base = dateTime(d, '00:00').getTime();
+    for (const g of blocksOn(d)) {
+      const a = base + toMin(g.start) * 60000, b = base + toMin(g.end) * 60000;
+      if (hit(a, b) && !seen.has('b' + g.id)) {
+        seen.add('b' + g.id);
+        hits.push({ kind: 'block', label: g.title || (area(g.areaId) || {}).name || 'Постоянный блок', date: d, start: g.start, end: g.end, block: g.block });
+      }
+    }
+    for (const x of timedOn(d)) {
+      if (exclude.includes(x.t.id) || seen.has(x.t.id)) continue;
+      const a = base + x.a * 60000, b = base + x.b * 60000;
+      if (hit(a, b)) {
+        seen.add(x.t.id);
+        hits.push({ kind: 'task', label: x.t.text, task: x.t, date: x.t.date, start: x.t.time, end: x.t.dur ? hm(new Date(dateTime(x.t.date, x.t.time).getTime() + x.t.dur * 60000)) : null });
+      }
+    }
+  }
+  return hits;
+}
+
 // ——— обмен ———
+export const receivedKey = (obj) => norm(obj.from || '?') + ':' + obj.id;
+export const wasReceived = (obj) => meta('received', []).includes(receivedKey(obj));
+export const contactByName = (name) => (settings().contacts || []).find((c) => norm(c.name) === norm(name)) || null;
+export const privateAreas = () => areasList().filter((a) => a.private);
+
+/** Минуты между началом и окончанием записи сессии (null — окончания нет). */
+export function spanMin(start, end) {
+  if (!end || !start.time) return null;
+  if (!end.time && end.date === start.date) return null;
+  const a = dateTime(start.date, start.time), b = dateTime(end.date, end.time || start.time);
+  const m = Math.round((b - a) / 60000);
+  return m > 0 ? m : null;
+}
+
+/** Куда ляжет запись сессии: контакт, область, человек, шаблон. */
+export function sessionTargets(obj) {
+  const contact = contactByName(obj.from);
+  const person = obj.client ? findPersonByCode(obj.client) : null;
+  const anchored = templatesList().filter((t) => t.anchor);
+  const byName = (list) => list.find((t) => /сесс|консульт/i.test(t.name + ' ' + (t.synonyms || []).join(' '))) || null;
+  const areaId = (contact && contact.areaId) || null;
+  let tpl = person && person.templateId ? S.templates.get(person.templateId) : null;
+  if (!tpl || tpl.deletedAt) tpl = byName(anchored.filter((t) => area(t.areaId) && area(t.areaId).private)) || byName(anchored) || null;
+  const a = area(areaId);
+  // новый клиент — всегда в закрытую область
+  const privArea = (a && a.private && a) || (tpl && area(tpl.areaId) && area(tpl.areaId).private && area(tpl.areaId)) || privateAreas()[0] || null;
+  return { contact, areaId: areaId || (tpl && tpl.areaId) || (privArea && privArea.id) || null, person, tpl, privArea };
+}
+
+/**
+ * Запись сессии сразу в план (минуя «Входящие»): якорь цепочки или задача со временем.
+ * when = {start:{date,time}, end:{date,time}|null}; opts.createPerson — создать человека по коду.
+ */
+export function addSession(obj, when, opts = {}) {
+  const tg = sessionTargets(obj);
+  let out = null;
+  const r = change(() => {
+    let p = tg.person;
+    if (!p && opts.createPerson && obj.client && tg.privArea) {
+      p = newPerson({ code: obj.client, areaId: tg.privArea.id, templateId: tg.tpl ? tg.tpl.id : null });
+      put('people', p);
+    }
+    const dur = spanMin(when.start, when.end);
+    if (tg.tpl) {
+      const res = launchTemplate(tg.tpl.id, { anchor: { date: when.start.date, time: when.start.time, dur: dur || tg.tpl.anchor.dur }, personId: p ? p.id : null });
+      out = { group: res.group, tasks: res.tasks };
+    } else {
+      const t = newTask({
+        text: 'Сессия' + (obj.client ? ' · ' + obj.client : ''), date: when.start.date, dateKind: 'day', time: when.start.time,
+        dur, areaId: (p && p.areaId) || tg.areaId, personId: p ? p.id : null, from: { name: obj.from || '' }, srcId: obj.id, isAnchor: false,
+      });
+      put('tasks', t);
+      out = { task: t, tasks: [t] };
+    }
+    setMeta('received', [...meta('received', []), receivedKey(obj)].slice(-2000));
+  });
+  return { ...r, ...out };
+}
+
+/** «Не сейчас» — запись сессии сохраняется во «Входящие», чтобы не потерялась. */
+export function sessionToInbox(obj) {
+  const tg = sessionTargets(obj);
+  const t = newTask({
+    text: 'Сессия' + (obj.client ? ' · ' + obj.client : ''), date: obj.start.date, dateKind: 'day', time: obj.start.time,
+    dur: spanMin(obj.start, obj.end), inbox: true, areaId: (tg.privArea && tg.privArea.id) || tg.areaId,
+    from: { name: obj.from || '' }, srcId: obj.id, personId: tg.person ? tg.person.id : null,
+  });
+  return change(() => {
+    put('tasks', t);
+    setMeta('received', [...meta('received', []), receivedKey(obj)].slice(-2000));
+  });
+}
+
+/** «Скрыть»: переносит пришедшую задачу в закрытую область. */
+export function hideTask(id, areaId) {
+  const t = S.tasks.get(id);
+  if (!t) return null;
+  return change(() => put('tasks', { ...t, areaId, touchedAt: iso() }));
+}
+
 export function receiveShared(obj) {
-  const key = norm(obj.from || '?') + ':' + obj.id;
+  const key = receivedKey(obj);
   const received = meta('received', []);
   if (obj.kind === 'done') {
     const t = [...S.tasks.values()].find((x) => (x.shareId === obj.id || x.id === obj.id) && x.waitFor);

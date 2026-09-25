@@ -54,12 +54,15 @@ export async function reportDone(t) {
 }
 
 export function acceptShared(obj) {
+  // запись сессии и настройка контакта — свои экраны
+  if (obj.kind === 'session') { import('./session.js').then((m) => m.sessionScreen(obj)); return { type: 'session' }; }
+  if (obj.kind === 'setup') { import('./session.js').then((m) => m.setupScreen(obj)); return { type: 'setup' }; }
   const r = st.receiveShared(obj);
   if (r.type === 'task') {
     toast('Во «Входящие»' + (obj.from ? ': от ' + obj.from : ''), { action: 'Отменить', onAction: () => r.undo() });
     app.go('inbox');
   } else if (r.type === 'done') {
-    toast((obj.from || 'Сделано') + ': ✓ ' + r.task.text, { action: 'Отменить', onAction: () => r.undo() });
+    toast((obj.from || 'Сделано') + ': ✓ ' + (st.isPrivate(r.task) ? 'задача закрыта' : r.task.text), { action: 'Отменить', onAction: () => r.undo() });
   } else if (r.type === 'dup') toast('Эта задача уже есть');
   else toast('Задача не найдена');
   return r;
@@ -84,10 +87,14 @@ export function handleHash() {
 function landing(obj, codeFrag) {
   const code = codeFrag.slice(2);
   const when = obj.date ? dateLabel(obj.date, obj.dateKind || 'day', st.clock()) + (obj.time ? ', ' + obj.time : '') : '';
+  // если задача от этого контакта ложится в закрытую область — текст не показываем и здесь
+  const c = st.contactByName(obj.from);
+  const hidden = obj.kind === 'session' || !!(c && st.area(c.areaId) && st.area(c.areaId).private);
+  const kindLabel = { done: 'Отметка о выполнении', session: 'Запись сессии', setup: 'Настройка' }[obj.kind] || 'Задача';
   const s = sheet(() => h('div.form',
     h('div.card', { style: { margin: 0 } },
-      h('div.muted.small', obj.kind === 'done' ? 'Отметка о выполнении' : 'Задача' + (obj.from ? ' от ' + obj.from : '')),
-      h('div.t-text', obj.text), when ? h('div.muted', when) : null),
+      h('div.muted.small', kindLabel + (obj.from ? ' от ' + obj.from : '')),
+      h('div.t-text' + (hidden ? '.masked' : ''), hidden ? '•••' : obj.text), when && !hidden ? h('div.muted', when) : null),
     h('p.muted', 'Похоже, ссылка открылась во встроенном браузере. Чтобы задача попала в ваш планировщик, откройте её в приложении или скопируйте код и нажмите «Вставить задачу» во «Входящих».'),
     h('button.btn.primary.block', {
       onclick: async () => {

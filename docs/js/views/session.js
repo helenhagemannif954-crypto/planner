@@ -1,0 +1,201 @@
+// Быстрая запись сессии ассистентом и её приём: отдельный заметный экран, проверка наложений.
+import { h, icon, sheet, toast, choose, pickDate, pickTime, shareOut, quickDays, buzz } from '../ui.js';
+import * as st from '../store.js';
+import { S } from '../store.js';
+import { fmtDay, fmtLong, fmtShort, addDays, dow, DOW_SHORT, dateTime, hm, ymd } from '../dates.js';
+import { encodeSession, encodeSetup, sessionText, linkFor } from '../share.js';
+import { app, isHidden, askPin } from './common.js';
+import { appBase } from './share.js';
+
+// ——— у ассистента: «Записать сессию» ———
+export const recordTargets = () => (st.settings().contacts || []).filter((c) => c.iRecord);
+
+export function openRecordForm() {
+  const targets = recordTargets();
+  if (!targets.length) { toast('Сначала включите у контакта «Я записываю ему сессии»'); return; }
+  const T = st.T();
+  const f = { to: targets[0].id, client: '', sd: T, stime: null, hasEnd: false, ed: T, etime: null };
+  let saved = null; // запись после сохранения — экран-подтверждение
+  const s = sheet(() => (saved ? confirmView() : formView()), { title: 'Записать сессию', full: true });
+
+  function dayChips(value, set, extra = []) {
+    return h('div.chips.wrap', extra, quickDays(st.clock()).map((q) => h('button.chip' + (value === q.date ? '.on' : ''), { onclick: () => { set(q.date); s.refresh(); } }, q.label)),
+      h('button.chip', { onclick: async () => { const d = await pickDate({ now: st.clock(), value, allowWeek: false, allowMonth: false, allowNone: false }); if (d && d.date) { set(d.date); s.refresh(); } } }, quickDays(st.clock()).some((q) => q.date === value) ? 'Выбрать…' : fmtDay(value, st.clock())));
+  }
+  function timeBtn(value, set, label) {
+    return h('button.btn', { 'aria-label': label, onclick: async () => { const t = await pickTime({ value, title: label }); if (t) { set(t.time); s.refresh(); } } }, icon('clock', 18), value || 'Время…');
+  }
+
+  function formView() {
+    const client = h('input.input', { value: f.client, maxlength: 40, placeholder: 'Код или имя, например А.К.', autofocus: true, 'aria-label': 'Клиент', style: { fontSize: '1.15rem' } });
+    client.addEventListener('input', () => { f.client = client.value; });
+    const unsent = st.meta('recordedSessions', []).filter((r) => !r.sent).slice(0, 5);
+    return h('div.form',
+      targets.length > 1 ? h('div.field', h('label', 'Для кого'), h('div.chips.wrap', targets.map((c) => h('button.chip' + (f.to === c.id ? '.on' : ''), { onclick: () => { f.to = c.id; s.refresh(); } }, c.name)))) : null,
+      h('div.field', h('label', 'Клиент'), client),
+      h('div.field', h('label', 'Начало'), dayChips(f.sd, (d) => { f.sd = d; if (!f.hasEnd || f.ed < d) f.ed = d; }), h('div', timeBtn(f.stime, (t) => { f.stime = t; }, 'Время начала'))),
+      h('div.field', h('label', 'Окончание (необязательно)'),
+        h('div.chips.wrap',
+          h('button.chip' + (!f.hasEnd ? '.on' : ''), { onclick: () => { f.hasEnd = false; s.refresh(); } }, 'Без окончания'),
+          h('button.chip' + (f.hasEnd ? '.on' : ''), { onclick: () => { f.hasEnd = true; if (f.ed < f.sd) f.ed = f.sd; s.refresh(); } }, 'Указать')),
+        f.hasEnd ? h('div',
+          h('div.chips.wrap',
+            h('button.chip' + (f.ed === f.sd ? '.on' : ''), { onclick: () => { f.ed = f.sd; s.refresh(); } }, 'Тот же день'),
+            h('button.chip' + (f.ed === addDays(f.sd, 1) ? '.on' : ''), { onclick: () => { f.ed = addDays(f.sd, 1); s.refresh(); } }, 'Следующий день'),
+            h('button.chip', { onclick: async () => { const d = await pickDate({ now: st.clock(), value: f.ed, allowWeek: false, allowMonth: false, allowNone: false }); if (d && d.date) { f.ed = d.date; s.refresh(); } } }, f.ed !== f.sd && f.ed !== addDays(f.sd, 1) ? fmtDay(f.ed, st.clock()) : 'Выбрать…')),
+          timeBtn(f.etime, (t) => { f.etime = t; }, 'Время окончания')) : null),
+      h('button.btn.primary.block', { style: { minHeight: '3.5rem', fontSize: '1.1rem', marginTop: '.5rem' }, onclick: save }, 'Сохранить'),
+      unsent.length ? h('div.section', h('div.section-h', h('span', 'Не отправлено')), unsent.map((r) => h('div.line-btn',
+        h('span.grow', r.client, h('div.muted.small', fmtDay(r.start.date, st.clock()) + (r.start.time ? ' ' + r.start.time : ''))),
+        h('button.chip.small', { onclick: () => { saved = r; s.refresh(); } }, 'Отправить')))) : null,
+    );
+  }
+
+  function save() {
+    if (!f.client.trim()) { toast('Укажите код или имя клиента'); return; }
+    if (f.hasEnd && f.stime && f.etime && dateTime(f.ed, f.etime) <= dateTime(f.sd, f.stime)) { toast('Окончание должно быть позже начала'); return; }
+    const to = targets.find((c) => c.id === f.to) || targets[0];
+    const rec = {
+      id: st.uid(), to: to.name, client: f.client.trim(), at: st.clock().toISOString(), sent: false,
+      start: { date: f.sd, time: f.stime }, end: f.hasEnd ? { date: f.ed, time: f.etime } : null,
+    };
+    st.change(() => st.setMeta('recordedSessions', [rec, ...st.meta('recordedSessions', [])].slice(0, 30)));
+    buzz(10);
+    saved = rec;
+    s.refresh();
+  }
+
+  function confirmView() {
+    const r = saved;
+    const me = st.settings().myName || '';
+    return h('div.added',
+      h('div.okmark', icon('check')),
+      h('h2', 'Записано'),
+      h('p', { style: { fontSize: '1.1rem', margin: 0 } }, r.client),
+      h('p.muted', { style: { margin: 0 } }, sessionText(r, '', st.clock()).replace(/^сессия [^—]*— /, '')),
+      h('button.btn.primary', {
+        style: { minHeight: '4rem', fontSize: '1.2rem', padding: '0 2rem', marginTop: '1rem' },
+        onclick: async () => {
+          const url = linkFor(encodeSession(r, me), appBase(), 't');
+          const res = await shareOut({ title: 'Сессия', text: sessionText(r, me, st.clock()), url });
+          if (res === 'aborted') return;
+          st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
+          toast(res === 'copied' ? 'Ссылка скопирована — вставьте в сообщение' : 'Отправлено');
+          s.close();
+        },
+      }, icon('send', 22), 'Отправить ' + r.to),
+      h('button.btn.ghost', { onclick: () => { saved = null; f.client = ''; s.refresh(); } }, 'Записать ещё'));
+  }
+}
+
+// ——— у меня: заметный экран записи сессии ———
+export function sessionScreen(obj) {
+  if (st.wasReceived(obj)) { toast('Эта запись уже в плане'); return; }
+  const tg = st.sessionTargets(obj);
+  const areaObj = st.area(tg.areaId);
+  const priv = !!(areaObj && areaObj.private) || !!(tg.privArea && (!areaObj || areaObj.private));
+  let shown = !priv;
+  let busy = false;
+  const now = st.clock();
+  const when = (p) => (p ? fmtLong(p.date) + (p.time ? ', ' + p.time : '') : 'не указан');
+  const s = sheet(() => {
+    const p = tg.person;
+    const clientEl = shown ? h('b', obj.client || 'без кода') : h('button.masked', {
+      'aria-label': 'Показать клиента',
+      onclick: async () => {
+        const a = tg.privArea || areaObj;
+        if (a && a.pinLock && st.settings().pinHash && !(await askPin('Показать клиента'))) return;
+        shown = true; s.refresh();
+      },
+    }, '•••');
+    return h('div.form',
+      h('div.card.calm', { style: { margin: 0 } },
+        h('div.muted.small', 'Запись сессии' + (obj.from ? ' от ' + obj.from : '')),
+        h('dl.kv', { style: { fontSize: '1.05rem', marginTop: '.5rem' } },
+          h('dt', 'Клиент'), h('dd', clientEl, p && shown ? h('span.muted', ' · сессия №' + ((p.counter || 0) + 1)) : !p && obj.client && shown ? h('span.muted', ' · новый') : null),
+          h('dt', 'Начало'), h('dd', when(obj.start)),
+          h('dt', 'Конец'), h('dd', obj.end ? when(obj.end) : 'не указан'),
+          h('dt', 'Область'), h('dd', areaObj ? [areaObj.private ? icon('lock', 14) : null, ' ' + areaObj.name] : '—'))),
+      h('button.btn.primary.block', { style: { minHeight: '3.75rem', fontSize: '1.15rem' }, disabled: busy, onclick: () => addFlow() }, icon('plan', 20), 'Добавить в план'),
+      h('button.btn.ghost.block', {
+        onclick: () => { const r = st.sessionToInbox(obj); s.close(); toast('Во «Входящие»', { action: 'Отменить', onAction: () => r.undo() }); },
+      }, 'Не сейчас — во «Входящие»'));
+  }, { title: 'Запись сессии', full: true });
+
+  async function addFlow() {
+    const cur = { start: { ...obj.start }, end: obj.end ? { ...obj.end } : null };
+    const dur0 = st.spanMin(cur.start, cur.end);
+    for (let guard = 0; guard < 10; guard++) {
+      // проверяем период начало–конец (без конца — длительность якоря из шаблона)
+      const effDur = dur0 || (tg.tpl && tg.tpl.anchor ? Number(tg.tpl.anchor.dur) || 0 : 0);
+      let endD = null, endT = null;
+      if (cur.start.time && effDur) {
+        const e = new Date(dateTime(cur.start.date, cur.start.time).getTime() + effDur * 60000);
+        endD = ymd(e); endT = hm(e);
+      }
+      const hits = st.overlapsFor(cur.start.date, cur.start.time, endD, endT);
+      if (!hits.length) break;
+      const lines = hits.map((x) => {
+        const label = x.task && isHidden(x.task) ? '•••' : x.label;
+        return label + ' — ' + DOW_SHORT[dow(x.date) - 1] + ' ' + fmtShort(x.date) + ', ' + x.start + (x.end ? '–' + x.end : '');
+      });
+      const v = await choose('Накладывается по времени', [
+        { label: 'Добавить всё равно', value: 'add', primary: true },
+        { label: 'Изменить время', value: 'change' },
+      ], { text: 'Время сессии пересекается с: ' + lines.join('; ') + '.' });
+      if (!v) return;
+      if (v === 'add') break;
+      const d = await pickDate({ now: st.clock(), value: cur.start.date, title: 'Дата сессии', allowWeek: false, allowMonth: false, allowNone: false });
+      if (!d || !d.date) return;
+      const t = await pickTime({ value: cur.start.time, title: 'Начало' });
+      if (t === null) return;
+      cur.start = { date: d.date, time: t.time || cur.start.time };
+      if (dur0) {
+        const e = new Date(dateTime(cur.start.date, cur.start.time).getTime() + dur0 * 60000);
+        cur.end = { date: ymd(e), time: hm(e) };
+      }
+    }
+    let createPerson = false;
+    if (!tg.person && obj.client && tg.privArea) {
+      const v = await choose('Новый клиент', [
+        { label: 'Создать в «' + tg.privArea.name + '»', value: 'create', primary: true },
+        { label: 'Добавить без карточки клиента', value: 'none' },
+      ], { text: 'Такого кода ещё нет. Клиент будет в закрытой области: только код или инициалы.' });
+      if (!v) return;
+      createPerson = v === 'create';
+    }
+    const r = st.addSession(obj, cur, { createPerson });
+    buzz(10);
+    s.close();
+    const label = r.group ? (st.isPrivate({ areaId: r.group.areaId }) ? r.group.templateName : r.group.title) : 'Сессия';
+    toast('В плане: ' + label + ' — ' + fmtDay(cur.start.date, now) + (cur.start.time ? ' ' + cur.start.time : ''), { action: 'Отменить', onAction: () => r.undo() });
+  }
+}
+
+// ——— настройка контакта ———
+export async function sendSetup(contact) {
+  const me = st.settings().myName || '';
+  const url = linkFor(encodeSetup(st.uid(), me, true), appBase(), 't');
+  const res = await shareOut({ title: 'Настройка', text: (me || 'Я') + ' просит записывать ему сессии: откройте ссылку в планировщике.', url });
+  if (res === 'copied') toast('Ссылка скопирована — отправьте её ' + contact.name);
+}
+
+/** У ассистента: ссылка-настройка от «начальника». */
+export function setupScreen(obj) {
+  const from = obj.from || 'Контакт';
+  choose(from + ' просит записывать ему сессии', [
+    { label: obj.recordSessions ? 'Включить «Записать сессию»' : 'Выключить', value: true, primary: true },
+    { label: 'Не сейчас', value: false },
+  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: код клиента, начало и окончание — и одна кнопка «Отправить».' }).then((v) => {
+    if (!v) return;
+    const contacts = [...(st.settings().contacts || [])];
+    const c = st.contactByName(from);
+    if (c) contacts.splice(contacts.indexOf(c), 1, { ...c, iRecord: obj.recordSessions });
+    else contacts.push({ id: st.uid(), name: from, areaId: null, iRecord: obj.recordSessions });
+    st.setSettings({ contacts });
+    toast(obj.recordSessions ? 'Готово: «Записать сессию» — на экране «Сегодня»' : 'Выключено');
+    app.go('today');
+  });
+}
+
+export { S };

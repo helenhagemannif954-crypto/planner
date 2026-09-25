@@ -26,9 +26,19 @@ const isTime = (v) => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(
 /** Проверяет и обрезает входящие данные задачи. Возвращает чистый объект или null. */
 export function sanitizeShared(o) {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
-  const text = str(o.text, LIM.text).trim();
   const id = str(o.id, 40).replace(/[^\w\-]/g, '');
-  if (!text || !id) return null;
+  if (!id) return null;
+  if (o.kind === 'session') {
+    const pt = (x) => (x && typeof x === 'object' && isDate(x.date) ? { date: x.date, time: isTime(x.time) ? x.time : null } : null);
+    const start = pt(o.start), end = pt(o.end);
+    if (!start) return null;
+    return { kind: 'session', id, text: 'Сессия', from: str(o.from, LIM.name).trim(), client: str(o.client, 40).trim(), start, end };
+  }
+  if (o.kind === 'setup') {
+    return { kind: 'setup', id, text: 'Настройка', from: str(o.from, LIM.name).trim(), recordSessions: o.recordSessions === true };
+  }
+  const text = str(o.text, LIM.text).trim();
+  if (!text) return null;
   const res = {
     kind: o.kind === 'done' ? 'done' : 'task',
     id, text,
@@ -63,6 +73,22 @@ export function encodeTask(task, fromName) {
 export function encodeDone(task, fromName) {
   const o = { v: 1, kind: 'done', id: task.srcId || task.id, from: fromName || '', text: task.text };
   return 'v1.' + b64urlEncode(JSON.stringify(o));
+}
+
+/** Запись сессии от ассистента: клиент, начало, необязательное окончание. */
+export function encodeSession(rec, fromName) {
+  const o = { v: 1, kind: 'session', id: rec.id, from: fromName || '', client: rec.client || '', start: rec.start, end: rec.end || undefined };
+  return 'v1.' + b64urlEncode(JSON.stringify(o));
+}
+/** Настройка контакта: «записывает мне сессии». */
+export function encodeSetup(id, fromName, on = true) {
+  return 'v1.' + b64urlEncode(JSON.stringify({ v: 1, kind: 'setup', id, from: fromName || '', recordSessions: !!on }));
+}
+export function sessionText(rec, fromName, now = new Date()) {
+  const s = rec.start, e = rec.end;
+  let when = dateLabel(s.date, 'day', now) + (s.time ? ', ' + s.time : '');
+  if (e) when += e.date === s.date ? (e.time ? '–' + e.time : '') : ' — ' + dateLabel(e.date, 'day', now) + (e.time ? ', ' + e.time : '');
+  return (fromName ? fromName + ': ' : '') + 'сессия ' + (rec.client || '') + ' — ' + when;
 }
 
 /** Извлекает код из ссылки, фрагмента или произвольного текста. */

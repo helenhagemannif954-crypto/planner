@@ -226,3 +226,39 @@ test.describe('миграции данных', () => {
     expect(ok.summary.tasks).toBe(1);
   });
 });
+
+import { segmentsOn, blockRange, describeBlock } from '../docs/js/blocks.js';
+import { encodeSession, encodeSetup } from '../docs/js/share.js';
+
+test.describe('постоянные блоки', () => {
+  test('многодневный блок «пн 16:00 → вт 16:00» даёт часть каждому дню', () => {
+    const b = { id: 'd', dow: 1, start: '16:00', endDow: 2, end: '16:00' };
+    expect(segmentsOn([b], 1).map((x) => [x.start, x.end, x.min, x.cut])).toEqual([['16:00', '24:00', 480, true]]);
+    expect(segmentsOn([b], 2).map((x) => [x.start, x.end, x.min, x.cont])).toEqual([['00:00', '16:00', 960, true]]);
+    expect(segmentsOn([b], 3)).toEqual([]);
+    expect(describeBlock(b)).toBe('пн 16:00 → вт 16:00');
+  });
+  test('блок через конец недели: вс 20:00 → пн 08:00', () => {
+    const b = { id: 'w', dow: 7, start: '20:00', endDow: 1, end: '08:00' };
+    expect(segmentsOn([b], 7)[0].min).toBe(240);
+    expect(segmentsOn([b], 1)[0]).toMatchObject({ start: '00:00', end: '08:00', min: 480 });
+  });
+  test('без окончания — длительность по умолчанию, остаток дня свободен', () => {
+    const b = { id: 'n', dow: 3, start: '10:00' };
+    expect(blockRange(b, 60).e - blockRange(b, 60).s).toBe(60);
+    expect(segmentsOn([b], 3, () => 90)[0]).toMatchObject({ start: '10:00', end: '11:30', min: 90, explicit: false });
+  });
+  test('старый формат (конец в тот же день) работает как раньше', () => {
+    expect(segmentsOn([{ id: 'o', dow: 4, start: '07:30', end: '10:00' }], 4)[0].min).toBe(150);
+  });
+});
+
+test.describe('запись сессии: код обмена', () => {
+  test('клиент, начало и необязательное окончание', () => {
+    const code = encodeSession({ id: 's1', client: 'А.К.', start: { date: '2026-09-28', time: '18:00' }, end: { date: '2026-09-28', time: '19:00' } }, 'Мария');
+    expect(decode(code)).toMatchObject({ kind: 'session', id: 's1', from: 'Мария', client: 'А.К.', start: { date: '2026-09-28', time: '18:00' }, end: { date: '2026-09-28', time: '19:00' } });
+    const only = decode(encodeSession({ id: 's2', client: 'Б.', start: { date: '2026-09-28', time: null } }, 'Мария'));
+    expect(only.end).toBe(null);
+    expect(decode(encodeSetup('x1', 'Иоанн'))).toMatchObject({ kind: 'setup', recordSessions: true, from: 'Иоанн' });
+  });
+});

@@ -5,6 +5,7 @@ import { S } from '../store.js';
 import * as db from '../db.js';
 import { fmtDay, DOW_SHORT, DOW_FULL, ymd, fmtShort } from '../dates.js';
 import { app, taskRow, emptyState, sectionHead, hiddenArea, unlockArea } from './common.js';
+import { describeBlock } from '../blocks.js';
 
 export function openSettings() {
   const s = sheet(() => {
@@ -35,7 +36,7 @@ export function openSettings() {
 }
 
 function listSheet(title, render) {
-  const s = sheet(() => render(s), { title });
+  const s = sheet((api) => render(api), { title });
   const un = st.subscribe(() => { if (!s.el.contains(document.activeElement) || document.activeElement.tagName === 'BUTTON') s.refresh(); });
   const prev = s.onClose; s.onClose = () => { un(); prev && prev(); };
   return s;
@@ -48,11 +49,27 @@ export function contactsSheet() {
     const save = (contacts) => st.setSettings({ contacts });
     return h('div',
       h('p.muted.small', 'Просто имена. Область — куда попадают задачи от этого человека.'),
-      list.map((c) => h('div.line-btn',
-        h('span.grow', c.name, h('div.muted.small', 'входящие → ' + ((st.area(c.areaId) || {}).name || 'без области'))),
-        h('button.chip.small', { onclick: async () => { const { pickArea } = await import('./pickers.js'); const v = await pickArea(c.areaId); if (v !== undefined) save(list.map((x) => x.id === c.id ? { ...x, areaId: v } : x)); } }, 'Область'),
-        h('button.icon-btn', { 'aria-label': 'Переименовать', onclick: async () => { const v = await prompt('Имя', c.name, { max: 60 }); if (v) save(list.map((x) => x.id === c.id ? { ...x, name: v } : x)); } }, icon('edit', 18)),
-        h('button.icon-btn', { 'aria-label': 'Удалить', onclick: () => save(list.filter((x) => x.id !== c.id)) }, icon('trash', 18)))),
+      list.map((c) => {
+        const ar = st.area(c.areaId);
+        const upd = (patch) => save(st.settings().contacts.map((x) => (x.id === c.id ? { ...x, ...patch } : x)));
+        const sw = (on, label, hint, fn) => h('button.line-btn', { role: 'switch', 'aria-checked': String(!!on), 'aria-label': label + ' — ' + c.name, onclick: fn },
+          h('span.grow', label, h('div.muted.small', hint)), h('span.switch' + (on ? '.on' : '')));
+        return h('div.card', { style: { margin: '.4rem 0' } },
+          h('div.line-btn',
+            h('span.grow', h('b', c.name), h('div.muted.small', ar && ar.private ? icon('lock', 12) : null, ' входящие → ' + (ar ? ar.name + (ar.private ? ' (закрытая: скрыто сразу)' : '') : 'без области'))),
+            h('button.chip.small', { 'aria-label': 'Область для ' + c.name, onclick: async () => { const { pickArea } = await import('./pickers.js'); const v = await pickArea(c.areaId, { title: 'Входящие от «' + c.name + '» — в область' }); if (v !== undefined) upd({ areaId: v }); } }, 'Область'),
+            h('button.icon-btn', { 'aria-label': 'Переименовать', onclick: async () => { const v = await prompt('Имя', c.name, { max: 60 }); if (v) upd({ name: v }); } }, icon('edit', 18)),
+            h('button.icon-btn', { 'aria-label': 'Удалить', onclick: () => save(st.settings().contacts.filter((x) => x.id !== c.id)) }, icon('trash', 18))),
+          sw(c.recordsForMe, 'Записывает мне сессии', 'У неё в приложении появится «Записать сессию»', async () => {
+            upd({ recordsForMe: !c.recordsForMe });
+            if (!c.recordsForMe) {
+              const v = await choose('Отправить ' + c.name + ' настройку?', [{ label: 'Отправить ' + c.name, value: true, primary: true, icon: 'send' }, { label: 'Позже', value: false }],
+                { text: 'Ссылка включит у неё крупный пункт «Записать сессию».' });
+              if (v) { const { sendSetup } = await import('./session.js'); sendSetup(c); }
+            }
+          }),
+          sw(c.iRecord, 'Я записываю ему сессии', 'На «Сегодня» — крупный пункт «Записать сессию»', () => upd({ iRecord: !c.iRecord })));
+      }),
       h('div.row-btns', h('button.btn', { onclick: async () => { const v = await prompt('Новый контакт', '', { placeholder: 'Например: Жена', max: 60 }); if (v) save([...list, { id: st.uid(), name: v, areaId: null }]); } }, icon('plus', 18), 'Контакт')));
   });
 }
@@ -82,7 +99,7 @@ export function blocksSheet() {
       h('p.muted.small', 'Службы, приёмы, пары — то, что повторяется каждую неделю. Учитываются в нагрузке и видны на ленте дня.'),
       list.map((b) => h('div.line-btn',
         h('span.dot', { style: { background: (st.area(b.areaId) || {}).color || 'var(--faint)' } }),
-        h('span.grow', b.title || (st.area(b.areaId) || {}).name || 'Блок', h('div.muted.small', DOW_SHORT[b.dow - 1] + ' ' + b.start + '–' + b.end)),
+        h('span.grow', b.title || (st.area(b.areaId) || {}).name || 'Блок', h('div.muted.small', describeBlock(b, st.blockDur(b.areaId)))),
         h('button.icon-btn', { 'aria-label': 'Удалить блок', onclick: () => save(st.meta('blocks', []).filter((x) => x.id !== b.id)) }, icon('trash', 18)))),
       h('div.row-btns', h('button.btn', { onclick: () => addBlock() }, icon('plus', 18), 'Блок')));
   });
@@ -103,9 +120,26 @@ export async function addBlock() {
   if (!days) return;
   const a = await pickTime({ title: 'Начало' });
   if (!a || !a.time) return;
-  const b = await pickTime({ title: 'Конец', value: a.time });
-  if (!b || !b.time || b.time <= a.time) { toast('Конец должен быть позже начала'); return; }
-  st.change(() => st.setMeta('blocks', [...st.meta('blocks', []), ...days.map((d) => ({ id: st.uid(), title, areaId, dow: d, start: a.time, end: b.time }))]));
+  // окончание необязательно; может быть и на следующий день («пн 16:00 → вт 16:00»)
+  const dflt = st.blockDur(areaId);
+  const kind = await choose('Окончание', [
+    { label: 'Без окончания', hint: 'по умолчанию ' + (dflt % 60 ? dflt + ' мин' : dflt / 60 + ' ч'), value: 'none', primary: true },
+    { label: 'В тот же день…', value: 'same' },
+    { label: 'На следующий день…', value: 'next' },
+  ]);
+  if (!kind) return;
+  let end = null, next = false;
+  if (kind !== 'none') {
+    const b = await pickTime({ title: kind === 'next' ? 'Конец (на следующий день)' : 'Конец', value: a.time });
+    if (!b || !b.time) return;
+    if (kind === 'same' && b.time <= a.time) { toast('Конец должен быть позже начала'); return; }
+    end = b.time;
+    next = kind === 'next';
+  }
+  st.change(() => st.setMeta('blocks', [...st.meta('blocks', []), ...days.map((d) => ({
+    id: st.uid(), title, areaId, dow: d, start: a.time,
+    ...(end ? { end, endDow: next ? (d % 7) + 1 : d } : {}),
+  }))]));
 }
 
 function capacitySheet() {
