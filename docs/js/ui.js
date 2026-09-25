@@ -101,6 +101,15 @@ export function icon(name, size = 22) {
 export function buzz(ms = 12) { try { navigator.vibrate && navigator.vibrate(ms); } catch { /* нет */ } }
 export const reducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// ——— реальная видимая высота окна (без панелей браузера и клавиатуры) ———
+function setAppHeight() {
+  const hgt = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  document.documentElement.style.setProperty('--app-h', Math.round(hgt) + 'px');
+}
+setAppHeight();
+window.addEventListener('resize', setAppHeight);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', setAppHeight);
+
 // ——— листы (нижние панели) и кнопка «Назад» на Android ———
 const stack = [];
 let armed = false; // есть ли в истории наша запись для листов

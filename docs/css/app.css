@@ -65,7 +65,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ——— каркас ——— */
-#app { display: flex; flex-direction: column; height: 100dvh; max-width: 40rem; margin: 0 auto; position: relative; }
+#app { display: flex; flex-direction: column; height: 100vh; height: var(--app-h, 100vh); max-width: 40rem; margin: 0 auto; position: relative; }
 .top { display: flex; align-items: center; gap: .25rem; padding: .5rem .5rem .25rem 1rem; min-height: 3.25rem; }
 .top h1 { font-size: 1.25rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top .sub { display: block; font-size: .8125rem; color: var(--muted); font-weight: 400; }
@@ -184,18 +184,21 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .checkline .check { width: 2.2rem; height: 2.2rem; }
 .draft { background: var(--surface2); border-radius: .75rem; padding: .6rem .8rem; white-space: pre-wrap; max-height: 10rem; overflow: auto; font-size: .95rem; }
 .note-view { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diag { white-space: pre-wrap; overflow-wrap: anywhere; font: .82rem/1.45 ui-monospace, "Roboto Mono", monospace; background: var(--surface2); border-radius: .75rem; padding: .7rem .8rem; margin: .25rem 0 .75rem; user-select: text; }
 
 /* ——— листы ——— */
 .overlay { position: fixed; inset: 0; background: rgba(20, 15, 10, 0); z-index: 50; display: flex; align-items: flex-end; justify-content: center; transition: background .2s; }
 .overlay.open { background: rgba(20, 15, 10, .35); }
 .overlay:not(.open) { pointer-events: none; }
-.sheet { width: 100%; max-width: 40rem; max-height: 92dvh; background: var(--surface); border-radius: 1.25rem 1.25rem 0 0; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .22s cubic-bezier(.2,.8,.3,1); padding-bottom: var(--safe-b); }
+/* Высота листа: запасное 80vh для любых браузеров, точнее — реальная видимая высота из JS (--app-h).
+   dvh не используем как единственное правило: браузеры на старом движке его не знают и отбрасывают. */
+.sheet { width: 100%; max-width: 40rem; max-height: 80vh; max-height: calc(var(--app-h, 100vh) - 2.5rem - env(safe-area-inset-top, 0px)); background: var(--surface); border-radius: 1.25rem 1.25rem 0 0; display: flex; flex-direction: column; overflow: hidden; transform: translateY(100%); transition: transform .22s cubic-bezier(.2,.8,.3,1); }
 .overlay.open .sheet { transform: none; }
-.sheet.full { height: 100dvh; max-height: none; border-radius: 0; }
+.sheet.full { height: 100vh; height: var(--app-h, 100vh); max-height: none; border-radius: 0; }
 .overlay.full { background: var(--bg); }
-.sheet-head { display: flex; align-items: center; gap: .25rem; padding: .35rem .5rem 0 .75rem; min-height: 3rem; }
+.sheet-head { position: relative; flex: none; display: flex; align-items: center; gap: .25rem; padding: .35rem .5rem 0 .75rem; min-height: 3rem; }
 .sheet-head h2 { flex: 1; font-size: 1.1rem; }
-.sheet-body { overflow-y: auto; padding: .25rem 1rem 1.25rem; flex: 1; }
+.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: .25rem 1rem calc(1.25rem + env(safe-area-inset-bottom, 0px)); flex: 1 1 auto; min-height: 0; }
 .grab { width: 2.5rem; height: .3rem; border-radius: .2rem; background: var(--line); margin: .5rem auto .25rem; }
 .sheet-head .grab { position: absolute; left: 50%; transform: translateX(-50%); top: 0; }
 .choices { display: flex; flex-direction: column; gap: .4rem; }
@@ -224,7 +227,7 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .cal-cell.empty { visibility: hidden; }
 .cal-cell .marks { display: flex; gap: 2px; position: absolute; bottom: .25rem; }
 .cal-cell .marks i { width: .3rem; height: .3rem; border-radius: 50%; background: var(--faint); }
-.tgrid { max-height: 45dvh; overflow-y: auto; margin-top: .5rem; display: flex; flex-direction: column; gap: .25rem; }
+.tgrid { max-height: 45vh; max-height: calc(var(--app-h, 100vh) * .45); overflow-y: auto; margin-top: .5rem; display: flex; flex-direction: column; gap: .25rem; }
 .trow { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: .25rem; }
 .tcell { min-height: 2.6rem; border-radius: .6rem; background: var(--surface2); font-variant-numeric: tabular-nums; color: var(--muted); }
 .tcell.hour { color: var(--text); font-weight: 600; }
@@ -307,13 +310,13 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .whatnow .t-text { font-size: 1.25rem; margin: .5rem 0 1rem; }
 .selbar { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); display: flex; gap: .25rem; padding: .5rem .5rem calc(.5rem + var(--safe-b)); z-index: 20; align-items: center; }
 .selbar .grow { flex: 1; padding-left: .5rem; }
-.addonly { display: flex; flex-direction: column; height: 100dvh; padding: 1rem; gap: 1rem; max-width: 40rem; margin: 0 auto; }
+.addonly { display: flex; flex-direction: column; height: 100vh; height: var(--app-h, 100vh); padding: 1rem; gap: 1rem; max-width: 40rem; margin: 0 auto; }
 .addonly h1 { font-size: 1.3rem; }
 .addonly .comp-input { font-size: 1.15rem; min-height: 3.5rem; }
 .added { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .75rem; flex: 1; text-align: center; }
 .added .okmark { width: 4rem; height: 4rem; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
 .added .okmark svg { width: 2.2rem; height: 2.2rem; stroke-width: 2.6; stroke-dasharray: 24; stroke-dashoffset: 24; animation: tick .4s .05s ease forwards; }
-.onb { padding: 1.5rem 1.25rem; max-width: 36rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; min-height: 100dvh; }
+.onb { padding: 1.5rem 1.25rem; max-width: 36rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; min-height: 100vh; min-height: var(--app-h, 100vh); }
 .onb h1 { font-size: 1.5rem; }
 .onb .grow { flex: 1; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; font-size: .9rem; }

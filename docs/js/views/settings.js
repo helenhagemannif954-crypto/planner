@@ -1,5 +1,5 @@
 // Настройки, резервная копия, контексты, постоянные блоки, особые дни, журнал, поиск.
-import { h, icon, sheet, toast, choose, prompt, confirmBox, pickDate, pickTime, shareOut, clear } from '../ui.js';
+import { h, icon, sheet, toast, choose, prompt, confirmBox, pickDate, pickTime, shareOut, clear, copyText } from '../ui.js';
 import * as st from '../store.js';
 import { S } from '../store.js';
 import * as db from '../db.js';
@@ -7,7 +7,7 @@ import { fmtDay, DOW_SHORT, DOW_FULL, ymd, fmtShort } from '../dates.js';
 import { app, taskRow, emptyState, sectionHead, hiddenArea, unlockArea } from './common.js';
 import { describeBlock } from '../blocks.js';
 import { install, checkInstall, standalone, browserName } from '../install.js';
-import { calLog } from './calendar.js';
+import { METHODS, calendarMode, diagHistory, diagText, deliverIcs, testIcs, markLast, clearDiag, SEEN } from './calendar.js';
 
 export function openSettings() {
   const s = sheet(() => {
@@ -27,14 +27,15 @@ export function openSettings() {
       }),
       h('button.line-btn', { role: 'switch', 'aria-checked': String(cfg.autoCalendar !== false), onclick: () => st.setSettings({ autoCalendar: cfg.autoCalendar === false }) },
         icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу передать событие в Яндекс.Календарь')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
-      line('cal', 'Как передавать в календарь', cfg.calendarMode === 'download' ? 'скачивать файл' : 'сразу открыть', async () => {
+      line('cal', 'Как передавать в календарь', calendarMode() === 'auto' ? 'автоматически' : METHODS[calendarMode()], async () => {
+        const cur = calendarMode();
         const v = await choose('Как передавать в календарь', [
-          { label: 'Сразу открыть', hint: 'рекомендуется', value: 'auto', primary: cfg.calendarMode !== 'download' },
-          { label: 'Скачивать файл', value: 'download', primary: cfg.calendarMode === 'download' },
-        ], { text: '«Сразу открыть»: окно «Отправить в…» с Яндекс.Календарём, а если браузер так не умеет — файл открывается во вкладке. «Скачивать файл» — запасной способ, если на вашем телефоне первый не работает: файл ляжет в Загрузки, откуда его открывают вручную.'
-          + (calLog.length ? ' Последняя попытка: ' + calLog[calLog.length - 1].msg + '.' : '') });
+          { label: 'Автоматически', hint: 'share с файлом → прямой переход по blob-ссылке → скачивание', value: 'auto', primary: cur === 'auto' },
+          ...Object.keys(METHODS).map((k) => ({ label: METHODS[k], value: k, primary: cur === k })),
+        ], { text: 'Какой способ открывает Яндекс.Календарь на вашем телефоне, видно в «Диагностике календаря»: сделайте пробную попытку каждым способом и отметьте, что произошло.' });
         if (v) st.setSettings({ calendarMode: v });
       }),
+      line('cal', 'Диагностика календаря', diagHistory().length ? String(diagHistory().length) : null, () => calendarDiagSheet()),
       line('lock', 'PIN для закрытых областей', cfg.pinHash ? 'задан' : 'нет', () => pinSheet()),
       line('download', 'Установка на рабочий стол', null, () => installSheet()),
       line('download', 'Резервная копия', st.meta('lastExport') ? fmtDay(st.meta('lastExport').slice(0, 10), st.clock()) : 'не было', () => backupSheet()),
@@ -227,6 +228,30 @@ async function pinSheet() {
   if (!/^\d{4}$/.test(pin)) { toast('Нужно ровно 4 цифры'); return; }
   await st.setPin(pin);
   toast('PIN сохранён');
+}
+
+// ——— диагностика календаря ———
+export function calendarDiagSheet() {
+  sheet((api) => {
+    const last = diagHistory()[0];
+    // вызов прямо из нажатия: иначе браузер не разрешит «Поделиться»
+    const attempt = (mode) => deliverIcs(testIcs(), 'proverka.ics', 'Проверка планировщика', mode ? { mode } : {}).then(() => api.refresh());
+    return h('div',
+      h('pre.diag', { 'aria-label': 'Текст диагностики' }, diagText()),
+      last && !last.seen ? h('div.card',
+        h('div', 'Что произошло на экране после последней попытки?'),
+        h('div.chips.wrap', Object.keys(SEEN).map((k) => h('button.chip', { onclick: () => { markLast(k); api.refresh(); } }, SEEN[k])))) : null,
+      last && last.seen === 'calendar' && last.method !== calendarMode() ? h('button.btn.primary.block', {
+        onclick: () => { st.setSettings({ calendarMode: last.method }); toast('Способ сохранён: ' + METHODS[last.method]); api.refresh(); },
+      }, 'Использовать этот способ: ' + METHODS[last.method]) : null,
+      h('button.btn.primary.block', { onclick: () => attempt() }, icon('cal', 18), 'Пробная попытка'),
+      h('p.muted.small', 'Отправляет событие «Проверка планировщика (можно удалить)» на завтра, 10:00 — выбранным в настройках способом. Или попробуйте конкретный способ:'),
+      h('div.chips.wrap', Object.keys(METHODS).map((k) => h('button.chip', { onclick: () => attempt(k) }, METHODS[k]))),
+      h('div.row-btns',
+        h('button.btn', { onclick: async () => toast((await copyText(diagText())) ? 'Текст диагностики скопирован' : 'Не удалось скопировать') }, 'Скопировать текст'),
+        h('button.btn', { onclick: () => { clearDiag(); api.refresh(); } }, 'Очистить историю')),
+    );
+  }, { title: 'Диагностика календаря' });
 }
 
 // ——— установка ———

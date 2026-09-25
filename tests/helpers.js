@@ -28,6 +28,8 @@ export async function add(page, text) {
   await inp.click();
   await inp.fill(text);
   await inp.press('Enter');
+  // дождаться записи в IndexedDB: тесты часто сразу перезагружают страницу
+  await page.evaluate(async () => (await import(new URL('js/store.js', document.baseURI).href)).flush()).catch(() => {});
 }
 
 export async function tab(page, name) {

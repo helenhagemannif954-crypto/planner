@@ -473,6 +473,7 @@ test('недельный обзор: шаги, можно прервать и п
 test('напоминание о копии: больше 7 дней без экспорта — мягкая карточка', async ({ page }) => {
   await start(page);
   await add(page, 'разобрать архив');
+  await dump(page); // дождаться записи в IndexedDB до перезагрузки
   await page.clock.setSystemTime(new Date('2026-10-05T09:00:00+04:00'));
   await page.reload();
   await page.waitForFunction(() => window.__ready === true);

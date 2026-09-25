@@ -109,6 +109,7 @@ test('вчерашнее — одной карточкой: перенести �
   await start(page);
   await add(page, 'первое дело сегодня');
   await add(page, 'второе дело сегодня');
+  await dump(page); // дождаться записи в IndexedDB до перезагрузки
   await page.clock.setSystemTime(new Date('2026-09-25T08:00:00+04:00'));
   await page.reload();
   await page.waitForFunction(() => window.__ready === true);

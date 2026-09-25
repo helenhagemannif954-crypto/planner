@@ -56,7 +56,10 @@ test('2) «Поделиться» файлом нельзя: файл откры
   expect(ics).toContain('SUMMARY:Забрать детей из школы');
   expect(ics).toMatch(/DTSTART:20260925T093000Z/);
   expect(await page.evaluate(() => window.__anchorDownloads)).toBe(0);
-  expect(logs.some((l) => l.includes('[календарь] файл открыт во вкладке (blob, без download)'))).toBe(true);
+  expect(logs.some((l) => /^\[календарь\] share с файлом: пропущен — .+ → прямой переход по blob-ссылке: без ошибки$/.test(l))).toBe(true);
+  const last = await page.evaluate(() => JSON.parse(localStorage.getItem('planner.calendarDiag'))[0]);
+  expect(last.method).toBe('nav');
+  expect(last.blobType).toBe('text/calendar;charset=utf-8');
   expect(page.url()).toBe('http://localhost:4173/');
   await expect(page.locator('#view')).toBeVisible();
   await expect(page.locator('.toast')).toContainText('Если вместо календаря началась загрузка: откройте Загрузки → нажмите на файл → выберите Яндекс.Календарь.');
@@ -80,7 +83,7 @@ test('«Поделиться» упало с ошибкой — тоже отк�
   }
 });
 
-test('3) резерв «Скачивать файл» из настроек: обычная загрузка и точная подсказка', async ({ browser }) => {
+test('3) резерв «скачивание» из настроек: обычная загрузка и точная подсказка', async ({ browser }) => {
   const ctx = await browser.newContext({ acceptDownloads: true });
   await ctx.addInitScript(spy, 'ok');
   const page = await ctx.newPage();
@@ -88,7 +91,7 @@ test('3) резерв «Скачивать файл» из настроек: о�
   await page.getByRole('button', { name: 'Меню' }).click();
   await page.getByRole('button', { name: 'Настройки' }).click();
   await page.getByRole('button', { name: /Как передавать в календарь/ }).click();
-  await page.getByRole('button', { name: /Скачивать файл/ }).click();
+  await page.getByRole('button', { name: 'скачивание', exact: true }).click();
   await page.keyboard.press('Escape');
   await add(page, 'пары в семинарии завтра');
   const id = (await dump(page)).data.tasks[0].id;
