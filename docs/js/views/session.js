@@ -3,8 +3,10 @@ import { h, icon, sheet, toast, choose, prompt, pickDate, pickTime, shareOut, qu
 import * as st from '../store.js';
 import { S } from '../store.js';
 import { fmtDay, fmtLong, fmtShort, addDays, dow, DOW_SHORT, dateTime, hm, ymd } from '../dates.js';
-import { encodeSession, encodeSetup, sessionText, linkFor } from '../share.js';
+import { encodeSetup, sessionText, linkFor } from '../share.js';
 import { app, isHidden, askPin } from './common.js';
+import { downloadFile, FILE_HINT } from './calendar.js';
+import { buildIcs } from '../ics.js';
 import { appBase } from './share.js';
 
 // ——— у ассистента: «Записать сессию» ———
@@ -29,7 +31,6 @@ export function openRecordForm() {
   function formView() {
     const client = h('input.input', { value: f.client, maxlength: 80, placeholder: 'Как вы его называете: имя, фамилия', autofocus: true, 'aria-label': 'Клиент', autocomplete: 'off', style: { fontSize: '1.15rem' } });
     client.addEventListener('input', () => { f.client = client.value; });
-    const unsent = st.meta('recordedSessions', []).filter((r) => !r.sent).slice(0, 5);
     return h('div.form',
       targets.length > 1 ? h('div.field', h('label', 'Для кого'), h('div.chips.wrap', targets.map((c) => h('button.chip' + (f.to === c.id ? '.on' : ''), { onclick: () => { f.to = c.id; s.refresh(); } }, c.name)))) : null,
       h('div.field', h('label', 'Клиент'), client),
@@ -45,9 +46,6 @@ export function openRecordForm() {
             h('button.chip', { onclick: async () => { const d = await pickDate({ now: st.clock(), value: f.ed, allowWeek: false, allowMonth: false, allowNone: false }); if (d && d.date) { f.ed = d.date; s.refresh(); } } }, f.ed !== f.sd && f.ed !== addDays(f.sd, 1) ? fmtDay(f.ed, st.clock()) : 'Выбрать…')),
           timeBtn(f.etime, (t) => { f.etime = t; }, 'Время окончания')) : null),
       h('button.btn.primary.block', { style: { minHeight: '3.5rem', fontSize: '1.1rem', marginTop: '.5rem' }, onclick: save }, 'Сохранить'),
-      unsent.length ? h('div.section', h('div.section-h', h('span', 'Не отправлено')), unsent.map((r) => h('div.line-btn',
-        h('span.grow', r.client, h('div.muted.small', fmtDay(r.start.date, st.clock()) + (r.start.time ? ' ' + r.start.time : ''))),
-        h('button.chip.small', { onclick: () => { saved = r; s.refresh(); } }, 'Отправить')))) : null,
     );
   }
 
@@ -65,9 +63,10 @@ export function openRecordForm() {
     s.refresh();
   }
 
+  // После сохранения — единственное действие: в общий Яндекс.Календарь (его видят оба).
+  let calDone = false;
   function confirmView() {
     const r = saved;
-    const me = st.settings().myName || '';
     return h('div.added',
       h('div.okmark', icon('check')),
       h('h2', 'Записано'),
@@ -75,17 +74,22 @@ export function openRecordForm() {
       h('p.muted', { style: { margin: 0 } }, sessionText(r, '', st.clock()).replace(/^сессия [^—]*— /, '')),
       h('button.btn.primary', {
         style: { minHeight: '4rem', fontSize: '1.2rem', padding: '0 2rem', marginTop: '1rem' },
-        onclick: async () => {
-          const url = linkFor(encodeSession(r, me), appBase(), 't');
-          const res = await shareOut({ title: 'Сессия', text: sessionText(r, me, st.clock()), url });
-          if (res === 'aborted') return;
+        onclick: () => {
+          downloadFile(sessionIcs(r, st.clock()), 'sessiya-' + r.start.date + '.ics');
           st.change(() => st.setMeta('recordedSessions', st.meta('recordedSessions', []).map((x) => (x.id === r.id ? { ...x, sent: true } : x))));
-          toast(res === 'copied' ? 'Ссылка скопирована — вставьте в сообщение' : 'Отправлено');
-          s.close();
+          calDone = true;
+          s.refresh();
         },
-      }, icon('send', 22), 'Отправить ' + r.to),
-      h('button.btn.ghost', { onclick: () => { saved = null; f.client = ''; s.refresh(); } }, 'Записать ещё'));
+      }, icon('cal', 22), 'Добавить в Яндекс.Календарь'),
+      calDone ? h('p.muted.cal-hint', { style: { maxWidth: '22rem' } }, FILE_HINT) : null);
   }
+}
+
+/** Событие сессии для общего календаря: без имени клиента, только инициалы. */
+export function sessionIcs(r, now) {
+  const dur = st.spanMin(r.start, r.end);
+  const t = { id: r.id, text: 'Сессия' + (r.client ? ' · ' + st.suggestCode(r.client) : ''), date: r.start.date, time: r.start.time || null, dur };
+  return buildIcs(t, { kind: t.time ? 'time' : 'day', now });
 }
 
 // ——— у меня: заметный экран записи сессии ———
@@ -205,7 +209,7 @@ export function setupScreen(obj) {
   choose(from + ' просит записывать ему сессии', [
     { label: obj.recordSessions ? 'Включить «Записать сессию»' : 'Выключить', value: true, primary: true },
     { label: 'Не сейчас', value: false },
-  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: кто клиент, начало и окончание — и одна кнопка «Отправить».' }).then((v) => {
+  ], { text: 'На экране «Сегодня» появится крупный пункт «Записать сессию»: кто клиент, начало и окончание — и одна кнопка «Добавить в Яндекс.Календарь».' }).then((v) => {
     if (!v) return;
     const contacts = [...(st.settings().contacts || [])];
     const c = st.contactByName(from);

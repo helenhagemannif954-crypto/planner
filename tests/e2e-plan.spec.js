@@ -278,14 +278,14 @@ test('обмен задачей между двумя профилями: без
   const a = await ctxA.newPage();
   await start(a, { name: 'Иоанн' });
   await a.evaluate(async () => { const st = await import(location.origin + '/js/store.js'); st.setSettings({ contacts: [{ id: 'c1', name: 'Жена', areaId: null }] }); });
-  await add(a, 'купить хлеб завтра в 18');
+  await add(a, 'купить хлеб');
   const taskId = (await dump(a)).data.tasks[0].id;
   await a.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, taskId);
   await a.getByRole('button', { name: 'Ещё', exact: true }).click();
   await a.getByRole('button', { name: 'Отправить задачу' }).click();
   await a.getByRole('button', { name: 'Жена' }).click();
   const shared = await a.evaluate(() => window.__shared[0]);
-  expect(shared.text).toContain('Иоанн: Купить хлеб — завтра, в 18:00');
+  expect(shared.text).toContain('Иоанн: Купить хлеб');
   const link = shared.text.match(/https?:\/\/\S+#t=v1\.\S+/)[0];
   expect(link.split('#')[0]).toBe('http://localhost:4173/');
   let d = await dump(a);
@@ -312,7 +312,7 @@ test('обмен задачей между двумя профилями: без
   await expect(b.locator('.toast')).toContainText('уже есть');
   d = await dump(b);
   expect(d.data.tasks.length).toBe(1);
-  expect(d.data.tasks[0]).toMatchObject({ text: 'Купить хлеб', date: '2026-09-25', time: '18:00', inbox: true, from: { name: 'Иоанн' } });
+  expect(d.data.tasks[0]).toMatchObject({ text: 'Купить хлеб', date: null, time: null, inbox: true, from: { name: 'Иоанн' } });
   expect(d.data.areas.find((x) => x.id === d.data.tasks[0].areaId).name).toBe('Семья');
   // жена закрывает → «Сообщить, что сделано»
   await tab(b, 'Входящие');
@@ -328,6 +328,35 @@ test('обмен задачей между двумя профилями: без
   expect(d.data.tasks[0].status).toBe('done');
   await ctxA.close();
   await ctxB.close();
+});
+
+test('задача с датой и временем: вместо «Отправить задачу» — «Добавить в календарь»', async ({ browser }) => {
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  await ctx.addInitScript(() => { window.__shares = 0; navigator.share = async () => { window.__shares++; }; navigator.canShare = () => true; });
+  const page = await ctx.newPage();
+  await start(page);
+  await page.evaluate(async () => { const st = await import(location.origin + '/js/store.js'); st.setSettings({ autoCalendar: false, contacts: [{ id: 'c1', name: 'Жена', areaId: null }] }); });
+  await add(page, 'забрать посылку завтра в 18');
+  await add(page, 'купить лампочки');
+  const d = await dump(page);
+  const dated = d.data.tasks.find((t) => t.time), plain = d.data.tasks.find((t) => !t.date);
+  const open = (id) => page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
+  await open(dated.id);
+  await expect(page.getByRole('button', { name: 'Добавить в календарь' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Отправить задачу' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  // даже «Поручить» из квадратов для задачи с датой уводит в календарь, а не в мессенджер
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(async (id) => { const st = await import(location.origin + '/js/store.js'); (await import(location.origin + '/js/views/share.js')).sendTask(st.S.tasks.get(id)); }, dated.id)]);
+  expect(readFileSync(await dl.path(), 'utf8')).toContain('SUMMARY:Забрать посылку');
+  expect(await page.evaluate(() => window.__shares)).toBe(0);
+  // без даты — пересылка есть, календаря нет
+  await open(plain.id);
+  await expect(page.getByRole('button', { name: 'Добавить в календарь' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Отправить задачу' })).toBeVisible();
+  await ctx.close();
 });
 
 test('ссылка во встроенном браузере: «Открыть в приложении» и «Скопировать код», затем «Вставить задачу»', async ({ browser }) => {
@@ -365,7 +394,8 @@ test('закрытая область: задачу нельзя отправи�
   await expect(page.getByText(/Закрытая область: задачу нельзя отправить/)).toBeVisible();
   await page.getByRole('button', { name: 'Ещё', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Отправить задачу' })).toHaveCount(0);
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'В календарь', exact: true }).click()]);
+  await page.keyboard.press('Escape');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в календарь' }).click()]);
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('SUMMARY:Встреча');
   expect(ics).not.toContain('клиентом');

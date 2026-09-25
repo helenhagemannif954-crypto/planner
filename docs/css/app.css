@@ -333,3 +333,5 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .stop-btn { display: flex; align-items: center; gap: .75rem; width: 100%; min-height: 3.5rem; padding: .5rem 1.1rem; border-radius: var(--radius); background: var(--gold); color: #fff; font-size: 1.05rem; }
 .stop-btn b { margin-left: auto; font-size: 1.15rem; padding: .35rem 1rem; border-radius: 1.2rem; background: rgba(255, 255, 255, .22); }
 .stop-btn .rec-dot { width: .8rem; height: .8rem; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
+.cal-box { display: flex; flex-direction: column; gap: .3rem; }
+.cal-hint { margin: 0 .25rem; }

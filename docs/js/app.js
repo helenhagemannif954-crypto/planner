@@ -12,6 +12,7 @@ import { renderInbox } from './views/inbox.js';
 import { renderAreas, renderArea } from './views/areas.js';
 import { openTask } from './views/task.js';
 import { handleHash } from './views/share.js';
+import { registerServiceWorker, logInstallState } from './install.js';
 
 app.common = common;
 app.openTask = openTask;
@@ -209,7 +210,8 @@ function startShell() {
 // ——— обновление приложения ———
 function registerSW() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  navigator.serviceWorker.register('sw.js').then((reg) => {
+  swReady.then((reg) => {
+    if (!reg) return;
     const offer = (w) => {
       const bar = h('div.update-bar', 'Доступна новая версия', h('button.btn.primary', {
         onclick: () => { w.postMessage('skipWaiting'); bar.remove(); },
@@ -223,7 +225,7 @@ function registerSW() {
       w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); });
     });
     setInterval(() => reg.update().catch(() => {}), 6 * 3600 * 1000);
-  }).catch(() => {});
+  });
   // первая установка тоже меняет controller — перезагружаемся только при обновлении
   let hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
@@ -232,6 +234,10 @@ function registerSW() {
     if (!reloading) { reloading = true; location.reload(); }
   });
 }
+
+// service worker — первым делом, до загрузки данных: условия установки не должны зависеть от приложения
+const swReady = registerServiceWorker();
+logInstallState();
 
 // ——— запуск ———
 async function boot() {

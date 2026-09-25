@@ -23,9 +23,14 @@ export function buildIcs(task, opts = {}) {
   const now = opts.now || new Date();
   const priv = !!opts.private;
   const kind = opts.kind || (task.time ? 'time' : 'deadline');
-  const summary = priv ? 'Встреча' : (kind === 'deadline' ? 'Срок: ' : '') + task.text;
+  const summary = priv ? 'Встреча' : opts.summary || (kind === 'deadline' ? 'Срок: ' : '') + task.text;
   let start, end, alarms;
-  if (kind === 'time') {
+  let allDay = null;
+  if (kind === 'day') {
+    // задача на день без времени — событие на весь день
+    allDay = { from: task.date.replace(/-/g, ''), to: addDays(task.date, 1).replace(/-/g, '') };
+    alarms = [];
+  } else if (kind === 'time') {
     // время — начало; без окончания событие-точка
     start = dateTime(task.date, task.time);
     end = new Date(start.getTime() + (Number(task.dur) || 0) * 60000);
@@ -41,8 +46,7 @@ export function buildIcs(task, opts = {}) {
     'BEGIN:VEVENT',
     'UID:' + esc(task.id) + '-' + kind + '@planner',
     'DTSTAMP:' + utc(now),
-    'DTSTART:' + utc(start),
-    'DTEND:' + utc(end),
+    ...(allDay ? ['DTSTART;VALUE=DATE:' + allDay.from, 'DTEND;VALUE=DATE:' + allDay.to] : ['DTSTART:' + utc(start), 'DTEND:' + utc(end)]),
     'SUMMARY:' + esc(summary),
   ];
   if (!priv && task.note) lines.push('DESCRIPTION:' + esc(task.note.slice(0, 1000)));

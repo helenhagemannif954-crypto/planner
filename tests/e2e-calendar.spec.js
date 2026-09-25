@@ -15,23 +15,27 @@ test('задача со временем: сразу после сохранен
   const ics = readFileSync(await dl.path(), 'utf8');
   expect(ics).toContain('SUMMARY:Забрать детей из школы');
   expect(ics).toMatch(/DTSTART:20260925T093000Z/);
-  await expect(page.locator('.toast')).toContainText('Откройте в Яндекс.Календаре');
+  await expect(page.locator('.toast')).toContainText('файл для Яндекс.Календаря');
   await ctx.close();
 });
 
-test('через системный выбор приложения, если браузер умеет делиться файлом', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__files = [];
-    navigator.canShare = (d) => !!(d && d.files);
-    navigator.share = async (d) => { window.__files.push(await d.files[0].text()); };
+test('«Поделиться» для .ics не используется даже там, где он есть: только скачивание, без посторонних меню', async ({ browser }) => {
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  await ctx.addInitScript(() => {
+    window.__shares = 0;
+    navigator.canShare = () => true;
+    navigator.share = async () => { window.__shares++; };
   });
+  const page = await ctx.newPage();
   await start(page);
-  await add(page, 'совет в семинарии завтра с 10 до 12');
-  await page.waitForFunction(() => window.__files.length > 0);
-  const ics = await page.evaluate(() => window.__files[0]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), add(page, 'совет в семинарии завтра с 10 до 12')]);
+  const ics = readFileSync(await dl.path(), 'utf8');
+  expect(dl.suggestedFilename()).toMatch(/\.ics$/);
   expect(ics).toContain('SUMMARY:Совет в семинарии');
   expect(ics).toMatch(/DTSTART:20260925T060000Z/);
   expect(ics).toMatch(/DTEND:20260925T080000Z/);
+  expect(await page.evaluate(() => window.__shares)).toBe(0);
+  await ctx.close();
 });
 
 test('закрытая область: в общий календарь — только «Встреча»', async ({ browser }) => {
@@ -68,31 +72,21 @@ test('без времени — календарь не предлагается
   // вручную — по-прежнему из карточки задачи
   const id = (await dump(page)).data.tasks.find((t) => t.time).id;
   await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
-  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'В календарь', exact: true }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в календарь' }).click()]);
   expect(readFileSync(await dl.path(), 'utf8')).toContain('SUMMARY:Встреча');
+  await expect(page.getByText('Файл сохранён — откройте его из уведомлений или папки Загрузки и выберите Яндекс.Календарь')).toBeVisible();
   await ctx.close();
 });
 
 // ——— имя клиента ———
 async function sessionLink(browser, client) {
   const ctx = await browser.newContext();
-  await ctx.addInitScript(() => { window.__shared = []; navigator.share = async (d) => { window.__shared.push(d); }; navigator.canShare = () => false; });
   const w = await ctx.newPage();
-  await start(w, { name: 'Мария' });
-  await st(w, (st) => st.setSettings({ contacts: [{ id: 'c', name: 'Иоанн', areaId: null, iRecord: true }] }));
-  await w.getByRole('button', { name: 'Записать сессию' }).click();
-  await expect(w.getByLabel('Клиент')).toHaveAttribute('placeholder', 'Как вы его называете: имя, фамилия');
-  await w.getByLabel('Клиент').fill(client);
-  await w.getByRole('button', { name: 'вс 27', exact: true }).click();
-  await w.getByRole('button', { name: 'Время начала' }).click();
-  await w.getByRole('button', { name: '11:00', exact: true }).click();
-  await w.getByRole('button', { name: 'Сохранить' }).click();
-  await w.getByRole('button', { name: 'Отправить Иоанн' }).click();
-  await w.waitForFunction(() => window.__shared.length > 0);
-  const text = await w.evaluate(() => window.__shared[0].text);
+  await w.goto('/manifest.json');
+  const code = await w.evaluate(async (client) => (await import(location.origin + '/js/share.js')).encodeSession(
+    { id: 'sl' + Math.random().toString(36).slice(2, 8), client, start: { date: '2026-09-27', time: '11:00' } }, 'Мария'), client);
   await ctx.close();
-  return text.match(/https?:\/\/\S+#t=v1\.\S+/)[0];
+  return 'http://localhost:4173/#t=' + code;
 }
 
 async function me(browser, people = []) {
@@ -172,4 +166,51 @@ test('точное совпадение с существующим челове
   await expect(page.getByText('Кто это?')).toHaveCount(0);
   const d = await dump(page);
   expect(d.data.people.find((p) => p.code === 'Ольга').counter).toBe(3);
+});
+
+test('«Записать сессию»: после сохранения единственное действие — «Добавить в Яндекс.Календарь»', async ({ browser }) => {
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  await ctx.addInitScript(() => { window.__shares = 0; navigator.share = async () => { window.__shares++; }; navigator.canShare = () => true; });
+  const w = await ctx.newPage();
+  await start(w, { name: 'Мария' });
+  await st(w, (st) => st.setSettings({ contacts: [{ id: 'c', name: 'Иоанн', areaId: null, iRecord: true }] }));
+  await w.getByRole('button', { name: 'Записать сессию' }).click();
+  await w.getByLabel('Клиент').fill('Анна Кузнецова');
+  await w.getByRole('button', { name: 'вс 27', exact: true }).click();
+  await w.getByRole('button', { name: 'Время начала' }).click();
+  await w.getByRole('button', { name: '11:00', exact: true }).click();
+  await w.getByRole('button', { name: 'Указать' }).click();
+  await w.getByRole('button', { name: 'Время окончания' }).click();
+  await w.getByRole('button', { name: '12:00', exact: true }).click();
+  await w.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(w.getByRole('heading', { name: 'Записано' })).toBeVisible();
+  const dlg = w.getByRole('dialog', { name: 'Записать сессию' });
+  await expect(dlg.getByRole('button', { name: /Отправить/ })).toHaveCount(0);
+  await expect(dlg.getByRole('button', { name: /Записать ещё/ })).toHaveCount(0);
+  const [dl] = await Promise.all([w.waitForEvent('download'), dlg.getByRole('button', { name: 'Добавить в Яндекс.Календарь' }).click()]);
+  const ics = readFileSync(await dl.path(), 'utf8');
+  expect(ics).toContain('SUMMARY:Сессия · А.К.');
+  expect(ics).not.toContain('Кузнецова');
+  expect(ics).toMatch(/DTSTART:20260927T070000Z/);
+  expect(ics).toMatch(/DTEND:20260927T080000Z/);
+  await expect(dlg.getByText('Файл сохранён — откройте его из уведомлений или папки Загрузки и выберите Яндекс.Календарь')).toBeVisible();
+  expect(await w.evaluate(() => window.__shares)).toBe(0);
+  await ctx.close();
+});
+
+test('задача на день без времени — событие на весь день; кнопка видна всегда', async ({ browser }) => {
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await start(page);
+  await add(page, 'именины тёщи 12 октября');
+  const id = (await dump(page)).data.tasks[0].id;
+  await page.evaluate(async (id) => { (await import(location.origin + '/js/views/task.js')).openTask(id); }, id);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Добавить в календарь' }).click()]);
+  const ics = readFileSync(await dl.path(), 'utf8');
+  expect(ics).toContain('DTSTART;VALUE=DATE:20261012');
+  expect(ics).toContain('DTEND;VALUE=DATE:20261013');
+  expect(errors).toEqual([]);
+  await ctx.close();
 });

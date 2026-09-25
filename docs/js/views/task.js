@@ -8,12 +8,14 @@ import { describe as describeRepeat } from '../recur.js';
 import { app, isHidden, reveal, complete, reschedule, deadlineLabel, personLabel, hiddenArea } from './common.js';
 import { pickArea, pickPerson, pickRepeat, pickContext, pickSize } from './pickers.js';
 import { describeOffset } from '../chain.js';
+import { calendarKind, sendToCalendar, FILE_HINT } from './calendar.js';
 
 export function openTask(id) {
   let t = S.tasks.get(id);
   if (!t) return;
   if (isHidden(t)) { reveal(t); return; }
   let showAll = false;
+  let calShown = false;
   let unsub = null;
   const s = sheet((api) => {
     t = S.tasks.get(id);
@@ -169,10 +171,10 @@ export function openTask(id) {
       },
     }, t.star ? '★ Главное' : '☆ Главное'));
     const more = [];
-    if (!done && !priv) more.push({ label: 'Отправить задачу', value: 'send', icon: 'send' });
+    // пересылка ссылкой — только для дел без даты и времени; всё, что с датой, — через общий календарь
+    if (!done && !priv && !t.date && !t.time) more.push({ label: 'Отправить задачу', value: 'send', icon: 'send' });
     if (t.from && !priv && st.privateAreas().length) more.push({ label: 'Скрыть в закрытую область', value: 'hide', icon: 'lock' });
     if (t.from && done) more.push({ label: 'Сообщить, что сделано', value: 'report', icon: 'send' });
-    if ((t.time && t.date) || t.deadline) more.push({ label: 'В календарь', value: 'ics', icon: 'cal' });
     if ((cl.length || g)) more.push({ label: 'Сохранить как шаблон', value: 'tpl', icon: 'chain' });
     if (!showAll) more.push({ label: 'Все поля', value: 'all', icon: 'list' });
     more.push({ label: 'Удалить', value: 'del', icon: 'trash', danger: true });
@@ -182,7 +184,6 @@ export function openTask(id) {
         if (v === 'all') { showAll = true; s.refresh(); }
         else if (v === 'send') { const { sendTask } = await import('./share.js'); sendTask(S.tasks.get(id)); }
         else if (v === 'report') { const { reportDone } = await import('./share.js'); reportDone(S.tasks.get(id)); }
-        else if (v === 'ics') icsFor(S.tasks.get(id));
         else if (v === 'hide') { const { hideIncoming } = await import('./common.js'); await hideIncoming(S.tasks.get(id)); api.close(); }
         else if (v === 'tpl') { const { editTemplate } = await import('./areas.js'); editTemplate(st.templateDraftFrom(S.tasks.get(id)), true); }
         else if (v === 'del') {
@@ -194,10 +195,19 @@ export function openTask(id) {
       },
     }, icon('more', 18)));
 
+    // «Добавить в календарь» — всегда видно у задачи с датой (или сроком), не спрятано в меню
+    const calKind = calendarKind(t);
+    const calBox = calKind && !done ? h('div.cal-box',
+      h('button.btn.block', {
+        onclick: () => { sendToCalendar(S.tasks.get(id), { kind: calKind, toastHint: false }); calShown = true; s.refresh(); },
+      }, icon('cal', 18), 'Добавить в календарь'),
+      calShown ? h('p.muted.small.cal-hint', FILE_HINT) : null) : null;
+
     return h('div.form',
-      priv ? h('div.muted.small', icon('lock', 14), ' Закрытая область: задачу нельзя отправить; в календарь уйдёт нейтральный текст.') : null,
+      priv ? h('div.muted.small', icon('lock', 14), ' Закрытая область: задачу нельзя отправить; в календарь уйдёт нейтральный текст «Встреча».') : null,
       text,
       h('div.row-btns', { style: { marginTop: 0 } }, actions),
+      calBox,
       h('div', rows),
       !showAll ? h('button.more-line', { onclick: () => { showAll = true; s.refresh(); } }, icon('plus', 18), 'Ещё поля: срок, размер, повтор, шаги, заметка…') : null,
       checklist, note, draft, info.length ? h('div.section', info) : null,
@@ -214,15 +224,8 @@ async function askFirstStep(id) {
   }
 }
 
-export async function icsFor(t) {
-  let kind = t.time && t.date ? 'time' : 'deadline';
-  if (t.time && t.date && t.deadline) {
-    const v = await choose('В календарь', [{ label: 'Время: ' + fmtShort(t.date) + ' ' + t.time, value: 'time' }, { label: 'Срок: ' + fmtShort(t.deadline), value: 'deadline' }]);
-    if (!v) return;
-    kind = v;
-  }
-  const { sendToCalendar } = await import('./calendar.js');
-  await sendToCalendar(t, { kind });
+export function icsFor(t) {
+  return sendToCalendar(t);
 }
 
 // ——— цепочка ———

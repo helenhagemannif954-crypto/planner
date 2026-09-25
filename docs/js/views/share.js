@@ -28,6 +28,12 @@ export async function pickContact(title = 'Кому') {
 export async function sendTask(t) {
   if (!t) return false;
   if (st.isPrivate(t)) { toast('Задачи закрытой области не отправляются'); return false; }
+  // у задачи с датой и временем другой путь — общий календарь (его видят оба)
+  if (t.date || t.time) {
+    const { sendToCalendar } = await import('./calendar.js');
+    sendToCalendar(t);
+    return false;
+  }
   const c = await pickContact('Отправить задачу');
   if (!c) return false;
   const me = st.settings().myName || '';

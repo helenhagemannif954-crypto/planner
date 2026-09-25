@@ -6,6 +6,7 @@ import * as db from '../db.js';
 import { fmtDay, DOW_SHORT, DOW_FULL, ymd, fmtShort } from '../dates.js';
 import { app, taskRow, emptyState, sectionHead, hiddenArea, unlockArea } from './common.js';
 import { describeBlock } from '../blocks.js';
+import { install, checkInstall, standalone, browserName } from '../install.js';
 
 export function openSettings() {
   const s = sheet(() => {
@@ -24,8 +25,9 @@ export function openSettings() {
         if (v) st.setSettings({ yearStart: v });
       }),
       h('button.line-btn', { role: 'switch', 'aria-checked': String(cfg.autoCalendar !== false), onclick: () => st.setSettings({ autoCalendar: cfg.autoCalendar === false }) },
-        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу выбор приложения для .ics')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
+        icon('cal', 20), h('span.grow', 'Автоматически предлагать календарь', h('div.muted.small', 'После сохранения задачи со временем — сразу файл .ics для Яндекс.Календаря')), h('span.switch' + (cfg.autoCalendar !== false ? '.on' : ''))),
       line('lock', 'PIN для закрытых областей', cfg.pinHash ? 'задан' : 'нет', () => pinSheet()),
+      line('download', 'Установка на рабочий стол', null, () => installSheet()),
       line('download', 'Резервная копия', st.meta('lastExport') ? fmtDay(st.meta('lastExport').slice(0, 10), st.clock()) : 'не было', () => backupSheet()),
       line('check', 'Журнал сделанного', null, () => journalSheet()),
       h('p.muted.small', { style: { marginTop: '1rem' } }, 'Данные хранятся только на этом устройстве. Никаких серверов и аккаунтов.'),
@@ -216,6 +218,41 @@ async function pinSheet() {
   if (!/^\d{4}$/.test(pin)) { toast('Нужно ровно 4 цифры'); return; }
   await st.setPin(pin);
   toast('PIN сохранён');
+}
+
+// ——— установка ———
+export function installSheet() {
+  sheet((api) => {
+    const box = h('div');
+    const how = {
+      chrome: 'Chrome: меню ⋮ → «Установить приложение» (или «Добавить на главный экран» → «Установить»).',
+      yandex: 'Яндекс.Браузер: меню ⋮ (или ≡) → «Установить приложение» / «Добавить ярлык на домашний экран». Если пункта нет — откройте этот адрес в Chrome.',
+      samsung: 'Samsung Internet: меню ≡ → «Добавить страницу» → «Главный экран».',
+      inapp: 'Сейчас страница открыта внутри другого приложения (мессенджера). Откройте адрес в Chrome или Яндекс.Браузере — там будет «Установить приложение».',
+      firefox: 'Firefox: меню ⋮ → «Установить».',
+      other: 'Откройте адрес в Chrome или Яндекс.Браузере.',
+    }[browserName()];
+    box.append(
+      standalone() ? h('div.card.calm', 'Приложение уже запущено как установленное.') : null,
+      install.prompt ? h('button.btn.primary.block', {
+        onclick: async () => {
+          const e = install.prompt;
+          install.prompt = null;
+          try { await e.prompt(); const c = await e.userChoice; toast(c && c.outcome === 'accepted' ? 'Устанавливается' : 'Установка отменена'); } catch (err) { toast('Браузер не дал установить: ' + err.message); }
+          api.refresh();
+        },
+      }, icon('download', 18), 'Установить приложение') : null,
+      h('p.muted.small', how),
+      sectionHead('Проверка условий'),
+    );
+    const list = h('div');
+    box.append(list, h('p.faint.small', 'Chrome предлагает установку, когда с сайтом немного поработали (касание и около 30 секунд). Если все пункты отмечены, а кнопки нет — подождите минуту и откройте меню браузера.'));
+    checkInstall().then((items) => {
+      for (const it of items) list.append(h('div.line-btn', h('span', { style: { color: it.ok ? 'var(--accent)' : 'var(--over)', minWidth: '1.2rem' } }, it.ok ? '✓' : '✕'), h('span.grow', it.label, it.detail ? h('div.muted.small', it.detail) : null)));
+      list.append(h('div.line-btn', h('span', { style: { minWidth: '1.2rem' } }, install.promptAt ? '✓' : '…'), h('span.grow', 'Браузер готов установить (beforeinstallprompt)', h('div.muted.small', install.promptAt ? 'получено' : 'пока нет'))));
+    });
+    return box;
+  }, { title: 'Установка на рабочий стол' });
 }
 
 // ——— резервная копия ———

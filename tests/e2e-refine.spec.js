@@ -174,30 +174,17 @@ test('настройка «Записывает мне сессии» доход
   await ctxA.close();
 });
 
+// Ссылки на запись сессии больше не отправляются (сессия уходит в общий календарь),
+// но ссылки прежней версии по-прежнему принимаются — проверяем приём.
 async function recordSession(browser, { client, day, from, to }) {
+  const date = { 'пн 28': '2026-09-28', 'вс 27': '2026-09-27' }[day];
   const ctx = await browser.newContext();
-  await ctx.addInitScript(capture);
   const w = await ctx.newPage();
-  await start(w, { name: 'Мария' });
-  await st(w, (st) => st.setSettings({ contacts: [{ id: 'c', name: 'Иоанн', areaId: null, iRecord: true }] }));
-  await w.getByRole('button', { name: 'Записать сессию' }).click();
-  await w.getByLabel('Клиент').fill(client);
-  await w.getByRole('button', { name: day, exact: true }).click();
-  await w.getByRole('button', { name: 'Время начала' }).click();
-  await w.getByRole('button', { name: from, exact: true }).click();
-  if (to) {
-    await w.getByRole('button', { name: 'Указать' }).click();
-    await w.getByRole('button', { name: 'Время окончания' }).click();
-    await w.getByRole('button', { name: to, exact: true }).click();
-  }
-  await w.getByRole('button', { name: 'Сохранить' }).click();
-  // сразу экран-подтверждение с одной крупной кнопкой
-  await expect(w.getByRole('heading', { name: 'Записано' })).toBeVisible();
-  await w.getByRole('button', { name: 'Отправить Иоанн' }).click();
-  await w.waitForFunction(() => window.__shared.length > 0);
-  const shared = await w.evaluate(() => window.__shared[0]);
+  await w.goto('/manifest.json');
+  const code = await w.evaluate(async ([client, date, from, to]) => (await import(location.origin + '/js/share.js')).encodeSession(
+    { id: 'rs' + Math.random().toString(36).slice(2, 8), client, start: { date, time: from }, end: to ? { date, time: to } : null }, 'Мария'), [client, date, from, to]);
   await ctx.close();
-  return shared;
+  return { text: 'Мария: сессия http://localhost:4173/#t=' + code };
 }
 
 async function boss(browser) {
@@ -214,9 +201,8 @@ async function boss(browser) {
   return page;
 }
 
-test('запись сессии: отдельный экран, наложение → «Изменить время» → в плане, минуя «Входящие»', async ({ browser }) => {
+test('ссылка записи сессии прежней версии: отдельный экран, наложение → «Изменить время» → в плане, минуя «Входящие»', async ({ browser }) => {
   const shared = await recordSession(browser, { client: 'А.К.', day: 'пн 28', from: '18:00', to: '19:00' });
-  expect(shared.text).toContain('Мария: сессия А.К. — пн, 28 сентября, 18:00–19:00');
   const link = shared.text.match(/https?:\/\/\S+#t=v1\.\S+/)[0];
   const page = await boss(browser);
   await page.goto(link);
@@ -248,7 +234,7 @@ test('запись сессии: отдельный экран, наложени
   await expect(page.locator('.toast')).toContainText('уже в плане');
 });
 
-test('запись сессии: при наложении можно «Добавить всё равно»; новый код — клиент в закрытой области', async ({ browser }) => {
+test('ссылка записи сессии прежней версии: при наложении можно «Добавить всё равно»; новый код — клиент в закрытой области', async ({ browser }) => {
   const shared = await recordSession(browser, { client: 'Б.В.', day: 'пн 28', from: '18:00' });
   const link = shared.text.match(/https?:\/\/\S+#t=v1\.\S+/)[0];
   const page = await boss(browser);
@@ -268,7 +254,7 @@ test('запись сессии: при наложении можно «Доба
   expect(anchor).toMatchObject({ date: '2026-09-28', time: '18:00', personId: p.id });
 });
 
-test('запись сессии без наложений добавляется сразу', async ({ browser }) => {
+test('ссылка записи сессии прежней версии без наложений добавляется сразу', async ({ browser }) => {
   const shared = await recordSession(browser, { client: 'А.К.', day: 'вс 27', from: '11:00', to: '12:00' });
   const link = shared.text.match(/https?:\/\/\S+#t=v1\.\S+/)[0];
   const page = await boss(browser);
