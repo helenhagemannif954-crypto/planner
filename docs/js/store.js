@@ -2,7 +2,7 @@
 import * as db from './db.js';
 import { uid, seedAreas, seedContexts, seedTemplates, COLORS } from './seed.js';
 import {
-  today, addDays, dow, weekStart, monthStart, diffDays, toMin, fromMin, dateTime, hm, ymd, addMonths,
+  today, addDays, dow, weekStart, monthStart, diffDays, toMin, fromMin, dateTime, hm, ymd, addMonths, TIME_STEP
 } from './dates.js';
 import { nextDate } from './recur.js';
 import { instantiate, reanchor, suggestOffsets, groupTitle } from './chain.js';
@@ -616,7 +616,7 @@ export function freeWindows(d, from = '07:00', to = '22:00') {
   const end = toMin(to);
   if (d === T()) {
     const n = clock();
-    cur = Math.max(cur, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15) * 15);
+    cur = Math.max(cur, Math.ceil((n.getHours() * 60 + n.getMinutes()) / TIME_STEP) * TIME_STEP);
   }
   const res = [];
   for (const [a, b] of busy) {

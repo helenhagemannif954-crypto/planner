@@ -239,9 +239,14 @@ textarea.input { min-height: 5rem; resize: vertical; }
 .cal-cell.empty { visibility: hidden; }
 .cal-cell .marks { display: flex; gap: 2px; position: absolute; bottom: .25rem; }
 .cal-cell .marks i { width: .3rem; height: .3rem; border-radius: 50%; background: var(--faint); }
-.tgrid { max-height: 45vh; max-height: calc(var(--app-h, 100vh) * .45); overflow-y: auto; margin-top: .5rem; display: flex; flex-direction: column; gap: .25rem; }
-.trow { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: .25rem; }
-.tcell { min-height: 2.6rem; border-radius: .6rem; background: var(--surface2); font-variant-numeric: tabular-nums; color: var(--muted); }
+.tgrid { max-height: 50vh; max-height: calc(var(--app-h, 100vh) * .5); overflow-y: auto; overscroll-behavior: contain; margin-top: .5rem; display: flex; flex-direction: column; gap: .6rem; position: relative; scroll-snap-type: y proximity; }
+/* час — блок 2 × 6 крупных кнопок (≥ 44 пикселей в высоту и не уже ~52 при ширине экрана 380) */
+.thour { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .3rem; scroll-snap-align: start; }
+.tcell { min-height: 2.9rem; border-radius: .6rem; background: var(--surface2); font-variant-numeric: tabular-nums; color: var(--muted); font-size: .95rem; padding: 0; }
+.thours { position: relative; display: flex; gap: .3rem; overflow-x: auto; margin-top: .5rem; padding-bottom: .15rem; scrollbar-width: none; }
+.thours::-webkit-scrollbar { display: none; }
+.thr.on { background: var(--accent); color: var(--accent-ink); }
+.thr { flex: none; min-width: 2.75rem; min-height: 2.75rem; border-radius: 1.4rem; background: var(--surface2); font-variant-numeric: tabular-nums; font-weight: 600; }
 .tcell.hour { color: var(--text); font-weight: 600; }
 .tcell.sel { background: var(--accent); color: var(--accent-ink); }
 

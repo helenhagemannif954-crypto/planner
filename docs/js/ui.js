@@ -1,6 +1,6 @@
 // Мини-набор для интерфейса: построение DOM (только textContent), листы, тосты, выбор даты и времени.
 import {
-  today, addDays, dow, weekStart, monthStart, daysInMonth, mkDate, fmtShort, DOW_SHORT, MONTHS_NOM, parseYmd, fromMin,
+  today, addDays, dow, weekStart, monthStart, daysInMonth, mkDate, fmtShort, DOW_SHORT, MONTHS_NOM, parseYmd, fromMin, TIME_STEP
 } from './dates.js';
 
 /** h('div.cls', {on:{click}}, 'текст', child) — строки всегда становятся текстовыми узлами. */
@@ -284,23 +284,56 @@ export function pickTime(opts = {}) {
     let dur = opts.dur || null;
     const finish = (v) => { done = true; s.close(); resolve(v && opts.withDur ? { ...v, dur } : v); };
     const s = sheet(() => {
-      const grid = [];
-      for (let hh = 6; hh <= 23; hh++) {
-        const row = [];
-        for (let q = 0; q < 60; q += 15) {
+      // Шаг 5 минут: 12 кнопок на час — по часу на блок из двух рядов по 6 крупных кнопок.
+      // Сетка прокручивается внутри листа; полоска часов сверху — прыжок к нужному часу.
+      const blocks = [];
+      const HOURS = [];
+      for (let hh = 6; hh <= 23; hh++) HOURS.push(hh);
+      for (const hh of HOURS) {
+        const cells = [];
+        for (let q = 0; q < 60; q += TIME_STEP) {
           const t = fromMin(hh * 60 + q);
-          row.push(h('button.tcell' + (t === opts.value ? '.sel' : '') + (q === 0 ? '.hour' : ''), { onclick: () => finish({ time: t, part: null }) }, q === 0 ? t : ':' + String(q).padStart(2, '0')));
+          cells.push(h('button.tcell' + (t === opts.value ? '.sel' : '') + (q === 0 ? '.hour' : ''), { 'aria-label': t, onclick: () => finish({ time: t, part: null }) }, q === 0 ? t : ':' + String(q).padStart(2, '0')));
         }
-        grid.push(h('div.trow', row));
+        blocks.push(h('div.thour', { dataset: { h: hh } }, cells));
       }
-      const g = h('div.tgrid', grid);
+      const g = h('div.tgrid', blocks);
+      let picked = null; // час, выбранный в полоске: последние часы не доходят до верха сетки
+      const goHour = (hh, smooth) => {
+        picked = hh;
+        const b = g.querySelector('[data-h="' + hh + '"]');
+        if (b) g.scrollTo({ top: Math.max(0, b.offsetTop - 4), behavior: smooth ? 'smooth' : 'auto' }); // .tgrid — offsetParent (position: relative)
+      };
+      const jump = h('div.thours', { role: 'group', 'aria-label': 'Час' }, HOURS.map((hh) => h('button.thr', { 'aria-label': 'К ' + hh + ' ч', onclick: () => goHour(hh, true) }, String(hh))));
+      // полоска часов следует за сеткой: текущий час выделен и виден
+      const mark = () => {
+        const top = g.scrollTop + 8;
+        let cur = HOURS[0];
+        for (const b of g.children) if (b.offsetTop <= top) cur = Number(b.dataset.h);
+        if (picked != null) {
+          const pb = g.querySelector('[data-h="' + picked + '"]');
+          if (pb && pb.offsetTop < g.scrollTop + g.clientHeight && pb.offsetTop + pb.offsetHeight > g.scrollTop) cur = picked;
+        }
+        for (const x of jump.children) {
+          const on = x.textContent === String(cur);
+          x.classList.toggle('on', on);
+          if (on && (x.offsetLeft < jump.scrollLeft || x.offsetLeft + x.offsetWidth > jump.scrollLeft + jump.clientWidth)) jump.scrollLeft = x.offsetLeft - jump.clientWidth / 2 + x.offsetWidth / 2;
+        }
+      };
+      let raf = 0;
+      g.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; mark(); }); });
+      // человек сам листает сетку — выделяется час вверху видимой части
+      for (const ev of ['touchstart', 'wheel', 'pointerdown']) g.addEventListener(ev, () => { picked = null; }, { passive: true });
       setTimeout(() => {
-        const sel = g.querySelector('.sel') || g.children[Math.max(0, (Number((opts.value || '09').slice(0, 2)) - 6))];
-        if (sel) g.scrollTop = Math.max(0, (sel.offsetTop || 0) - 60);
+        const sel = g.querySelector('.sel');
+        if (sel) g.scrollTop = Math.max(0, sel.offsetTop - 60);
+        else goHour(opts.value ? Number(opts.value.slice(0, 2)) : 9);
+        mark();
       }, 30);
       return h('div.timepick',
         h('div.chips', [['morning', 'Утро'], ['day', 'День'], ['evening', 'Вечер']].map(([p, l]) => h('button.chip' + (opts.part === p ? '.on' : ''), { onclick: () => finish({ time: null, part: p }) }, l))),
         opts.withDur ? h('div.chips.wrap', h('span.muted', 'Длительность:'), [15, 30, 60, 90, 120, 180].map((m) => h('button.chip.small' + (dur === m ? '.on' : ''), { onclick: () => { dur = dur === m ? null : m; s.refresh(); } }, m < 60 ? m + ' мин' : m / 60 + ' ч'))) : null,
+        jump,
         g,
         h('div.row-btns', h('button.btn', { onclick: () => finish({ time: null, part: null }) }, 'Без времени')));
     }, { title: opts.title || 'Время', onClose: () => { if (!done) resolve(null); } });

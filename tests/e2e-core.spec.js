@@ -44,7 +44,7 @@ test('ручной выбор времени: сетка с шагом 15 мин
   await inp.click();
   await inp.fill('встреча');
   await page.locator('.comp-extra').getByRole('button', { name: 'Время…' }).click();
-  await page.getByRole('button', { name: ':45' }).nth(8).click(); // 14:45
+  await page.getByRole('button', { name: '14:45', exact: true }).click();
   await expect(page.getByLabel('Распознано')).toContainText('14:45');
   await inp.press('Enter');
   const d = await dump(page);

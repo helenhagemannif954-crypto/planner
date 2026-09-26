@@ -1,5 +1,5 @@
 // Service worker: кэш всего приложения. Данные (IndexedDB) он не трогает.
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE = 'planner-' + VERSION;
 const FILES = [
   './',

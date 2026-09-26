@@ -67,6 +67,9 @@ export function diffDays(a, b) {
   // b - a в днях
   return Math.round((parseYmd(b) - parseYmd(a)) / 86400000);
 }
+/** Шаг сетки времени при планировании, минут: выбор времени, лента дня, свободные окна. */
+export const TIME_STEP = 5;
+
 export function toMin(t) {
   if (!t) return null;
   const [h, m] = t.split(':').map(Number);

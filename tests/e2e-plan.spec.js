@@ -82,7 +82,7 @@ test('перенос якоря через интерфейс сдвигает �
   await page.getByRole('button', { name: /Сессия · А.К. · №1/ }).click();
   await page.getByRole('button', { name: 'Перенести якорь' }).click();
   await page.getByRole('button', { name: '2026-09-30' }).click();
-  await page.getByRole('button', { name: ':30' }).nth(4).click(); // 10:30
+  await page.getByRole('button', { name: '10:30', exact: true }).click();
   await expect(page.locator('.toast')).toContainText('Цепочка сдвинута');
   const d = await dump(page);
   const steps = d.data.tasks.filter((t) => t.groupId === d.data.groups[0].id);

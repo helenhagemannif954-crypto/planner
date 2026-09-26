@@ -4,7 +4,7 @@ import * as st from '../store.js';
 import { S } from '../store.js';
 import {
   today, addDays, weekStart, monthStart, monthEnd, dow, fmtDay, fmtLong, fmtShort, fmtDur, toMin, fromMin,
-  DOW_SHORT, MONTHS_NOM, MONTHS, daysInMonth, mkDate, addMonths, parseYmd,
+  DOW_SHORT, MONTHS_NOM, MONTHS, daysInMonth, mkDate, addMonths, parseYmd, TIME_STEP
 } from '../dates.js';
 import { churchDay, churchYear } from '../church.js';
 import { hhmm } from '../blocks.js';
@@ -174,7 +174,7 @@ function dragToTimeline(e, t, tl, from) {
     ghost.style.top = ev.clientY - 20 + 'px';
     const r = tl.getBoundingClientRect();
     if (ev.clientY >= r.top && ev.clientY <= r.bottom && ev.clientX >= r.left - 40) {
-      const m = Math.round(((ev.clientY - r.top) / PX + from) / 15) * 15;
+      const m = Math.round(((ev.clientY - r.top) / PX + from) / TIME_STEP) * TIME_STEP;
       time = fromMin(m);
       ghost.textContent = time + ' · ' + (isHidden(t) ? '•••' : t.text);
     } else { time = null; ghost.textContent = isHidden(t) ? '•••' : t.text; }
