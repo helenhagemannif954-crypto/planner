@@ -1,0 +1,794 @@
+{
+  "_about": "Чины как последовательность блоков. t — тип блока; vol — для каких объёмов правила (short/normal/full; без vol — для всех); if — условия дня (penitent, sunday, paschal, lentWeekday, pinned, unpinned, am, pm; «!» — отрицание). Пояснение типов — в molitvoslov/README.md.",
+  "offices": [
+    {
+      "id": "morning",
+      "title": "Утро",
+      "when": "на рассвете",
+      "subtitle": "Пс 62 · Псалтирь · песнь дня · «Слава в вышних» · чтение",
+      "plans": {
+        "normal": [
+          {
+            "t": "theme",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "entry-morning",
+            "alt": [
+              {
+                "if": "paschal",
+                "id": "entry-pascha"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "id": "sunday-acclamation",
+            "if": [
+              "sunday",
+              "!paschal"
+            ]
+          },
+          {
+            "t": "psalm",
+            "n": 62,
+            "if": "pinned"
+          },
+          {
+            "t": "psalm",
+            "n": 50,
+            "if": "penitent",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "psalm",
+            "circle": true,
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "psalm",
+            "circle": true,
+            "if": "unpinned",
+            "vol": [
+              "short"
+            ]
+          },
+          {
+            "t": "ode",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "gloria",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "reading"
+          },
+          {
+            "t": "prayer",
+            "moment": "morning",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "prayer",
+            "moment": "morning",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "intercession",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "own",
+            "set": "morning",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "ephrem",
+            "if": "lentWeekday"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "word"
+          },
+          {
+            "t": "text",
+            "id": "ac-8-39",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "dismissal",
+            "set": "morning"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "weary.morning"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "entrust.weary"
+          }
+        ],
+        "hard": [
+          {
+            "t": "text",
+            "id": "entry-hard"
+          },
+          {
+            "t": "psalm",
+            "pool": "lament"
+          },
+          {
+            "t": "silence",
+            "k": 1.5
+          },
+          {
+            "t": "reading",
+            "pool": "consolation",
+            "questions": 1
+          },
+          {
+            "t": "prayer",
+            "moment": "hard",
+            "state": null
+          },
+          {
+            "t": "own",
+            "set": "hard",
+            "k": 2
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "entrust.hard"
+          }
+        ]
+      }
+    },
+    {
+      "id": "third",
+      "title": "Третий час",
+      "when": "до полудня",
+      "subtitle": "Стих псалма · Сошествие Духа · Отче наш",
+      "plans": {
+        "normal": [
+          {
+            "t": "verse",
+            "pool": "hours.3"
+          },
+          {
+            "t": "remembrance",
+            "hour": 3
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "neighbors",
+            "rubric": "О ближних"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "hours.3"
+          },
+          {
+            "t": "lord"
+          }
+        ],
+        "hard": [
+          {
+            "t": "text",
+            "id": "entry-hard"
+          },
+          {
+            "t": "verse",
+            "pool": "weary.hard"
+          },
+          {
+            "t": "own",
+            "set": "hard"
+          },
+          {
+            "t": "lord"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sixth",
+      "title": "Шестой час",
+      "when": "в полдень",
+      "subtitle": "Стих псалма · Распятие · Отче наш",
+      "plans": {
+        "normal": [
+          {
+            "t": "verse",
+            "pool": "hours.6"
+          },
+          {
+            "t": "remembrance",
+            "hour": 6
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "neighbors",
+            "rubric": "О ближних"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "hours.6"
+          },
+          {
+            "t": "lord"
+          }
+        ],
+        "hard": [
+          {
+            "t": "text",
+            "id": "entry-hard"
+          },
+          {
+            "t": "verse",
+            "pool": "weary.hard"
+          },
+          {
+            "t": "own",
+            "set": "hard"
+          },
+          {
+            "t": "lord"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ninth",
+      "title": "Девятый час",
+      "when": "после полудня",
+      "subtitle": "Стих псалма · смерть Христова · Отче наш",
+      "plans": {
+        "normal": [
+          {
+            "t": "verse",
+            "pool": "hours.9"
+          },
+          {
+            "t": "remembrance",
+            "hour": 9
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "neighbors",
+            "rubric": "О ближних"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "hours.9"
+          },
+          {
+            "t": "lord"
+          }
+        ],
+        "hard": [
+          {
+            "t": "text",
+            "id": "entry-hard"
+          },
+          {
+            "t": "verse",
+            "pool": "weary.hard"
+          },
+          {
+            "t": "own",
+            "set": "hard"
+          },
+          {
+            "t": "lord"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evening",
+      "title": "Вечер",
+      "when": "когда зажигают свет",
+      "subtitle": "Пс 140 · «Свет тихий» · пересмотр дня · песнь Симеона",
+      "plans": {
+        "normal": [
+          {
+            "t": "text",
+            "id": "entry-evening",
+            "alt": [
+              {
+                "if": "paschal",
+                "id": "entry-pascha-evening"
+              }
+            ]
+          },
+          {
+            "t": "psalm",
+            "n": 140,
+            "if": "pinned"
+          },
+          {
+            "t": "psalm",
+            "circle": true,
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "psalm",
+            "circle": true,
+            "if": "unpinned",
+            "vol": [
+              "short"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "phos"
+          },
+          {
+            "t": "prayer",
+            "kind": "word",
+            "moment": "evening",
+            "state": null,
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "at-25",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "ac-8-37",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "word",
+            "when": "evening",
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "review",
+            "set": "evening"
+          },
+          {
+            "t": "intercession",
+            "vol": [
+              "full"
+            ],
+            "prayer": false
+          },
+          {
+            "t": "text",
+            "id": "ac-7-48",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "ode",
+            "id": "symeon"
+          },
+          {
+            "t": "text",
+            "id": "ephrem",
+            "if": "lentWeekday"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "text",
+            "id": "ac-8-36",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "dismissal",
+            "set": "evening"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "weary.evening"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "entrust.evening"
+          }
+        ],
+        "hard": [
+          {
+            "t": "text",
+            "id": "entry-hard"
+          },
+          {
+            "t": "psalm",
+            "pool": "lament"
+          },
+          {
+            "t": "silence",
+            "k": 1.5
+          },
+          {
+            "t": "prayer",
+            "moment": "hard",
+            "state": null
+          },
+          {
+            "t": "review",
+            "set": "hard"
+          },
+          {
+            "t": "ode",
+            "id": "symeon"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "entrust.hard"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sleep",
+      "title": "Перед сном",
+      "when": "на ночь",
+      "subtitle": "Псалом · молитва о хранении · предание себя Богу",
+      "plans": {
+        "normal": [
+          {
+            "t": "psalm",
+            "pool": "sleep"
+          },
+          {
+            "t": "prayer",
+            "moment": "sleep"
+          },
+          {
+            "t": "silence",
+            "k": 0.5,
+            "vol": [
+              "normal",
+              "full"
+            ]
+          },
+          {
+            "t": "line",
+            "set": "entrust.sleep",
+            "rubric": "Предание"
+          },
+          {
+            "t": "dismissal",
+            "set": "sleep"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "weary.sleep"
+          },
+          {
+            "t": "line",
+            "set": "entrust.sleep"
+          }
+        ],
+        "hard": [
+          {
+            "t": "psalm",
+            "pool": "lament"
+          },
+          {
+            "t": "silence",
+            "k": 1
+          },
+          {
+            "t": "prayer",
+            "moment": "hard",
+            "state": null
+          },
+          {
+            "t": "line",
+            "set": "entrust.hard"
+          }
+        ]
+      }
+    },
+    {
+      "id": "night",
+      "title": "Полунощная",
+      "when": "среди ночи",
+      "subtitle": "В этот час вся тварь хвалит Бога",
+      "plans": {
+        "normal": [
+          {
+            "t": "text",
+            "id": "at-41-night"
+          },
+          {
+            "t": "psalm",
+            "pool": "night"
+          },
+          {
+            "t": "silence",
+            "k": 2
+          },
+          {
+            "t": "verse",
+            "pool": "night"
+          },
+          {
+            "t": "own",
+            "set": "night"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "entrust.night"
+          }
+        ],
+        "weary": [
+          {
+            "t": "verse",
+            "pool": "night"
+          },
+          {
+            "t": "lord"
+          }
+        ],
+        "hard": [
+          {
+            "t": "psalm",
+            "pool": "lament"
+          },
+          {
+            "t": "silence",
+            "k": 1.5
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "line",
+            "set": "entrust.hard"
+          }
+        ]
+      }
+    },
+    {
+      "id": "meal-before",
+      "title": "Перед едой",
+      "when": "за столом",
+      "subtitle": "Благодарение из Дидахе или «Апостольских постановлений»",
+      "states": false,
+      "plans": {
+        "normal": [
+          {
+            "t": "prayer",
+            "moment": "meal-before",
+            "state": null,
+            "rubric": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "meal-after",
+      "title": "После еды",
+      "when": "за столом",
+      "subtitle": "Благодарение из Дидахе",
+      "states": false,
+      "plans": {
+        "normal": [
+          {
+            "t": "prayer",
+            "moment": "meal-after",
+            "state": null,
+            "rubric": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "children",
+      "title": "С детьми",
+      "when": "3–5 минут всей семьёй",
+      "subtitle": "Стих · спасибо · о ком помолимся · Отче наш · благословение",
+      "states": false,
+      "plans": {
+        "normal": [
+          {
+            "t": "text",
+            "id": "children-open"
+          },
+          {
+            "t": "verse",
+            "pool": "children"
+          },
+          {
+            "t": "question",
+            "set": "children.thanks",
+            "k": 0.5
+          },
+          {
+            "t": "question",
+            "set": "children.people",
+            "k": 0.5
+          },
+          {
+            "t": "text",
+            "id": "children-morning",
+            "if": "am"
+          },
+          {
+            "t": "text",
+            "id": "children-evening",
+            "if": "pm"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "verse",
+            "pool": "childrenBlessing",
+            "rubric": "Благословение"
+          }
+        ]
+      }
+    },
+    {
+      "id": "theme",
+      "title": "Тема седмицы",
+      "when": "в любое время, около пяти минут",
+      "subtitle": "Стих темы · псалом · молитва · вопрос и тишина",
+      "states": false,
+      "plans": {
+        "normal": [
+          {
+            "t": "themeverse"
+          },
+          {
+            "t": "psalm",
+            "fromTheme": true
+          },
+          {
+            "t": "prayer",
+            "themeOnly": true,
+            "state": null
+          },
+          {
+            "t": "question",
+            "set": "theme",
+            "k": 1
+          },
+          {
+            "t": "own",
+            "set": "theme"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "dismissal",
+            "set": "theme"
+          }
+        ]
+      }
+    }
+  ],
+  "pools": {
+    "lament": [
+      6,
+      12,
+      21,
+      30,
+      37,
+      41,
+      42,
+      54,
+      68,
+      69,
+      76,
+      85,
+      87,
+      101,
+      129,
+      141,
+      142,
+      "ode:jonah"
+    ],
+    "sleep": [
+      4,
+      90,
+      120,
+      133
+    ],
+    "night": [
+      133,
+      148,
+      8,
+      18,
+      150,
+      116,
+      46
+    ]
+  }
+}

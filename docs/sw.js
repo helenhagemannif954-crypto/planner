@@ -1,5 +1,5 @@
 // Service worker: кэш всего приложения. Данные (IndexedDB) он не трогает.
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = 'planner-' + VERSION;
 const FILES = [
   './',
@@ -64,6 +64,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  // соседнее приложение в подпапке (молитвослов) обслуживает себя само
+  if (url.pathname.includes('/molitvoslov/')) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     // навигация (включая ?action=add, ?text=… от «Поделиться») — всегда оболочка приложения

@@ -7,7 +7,7 @@ const root = new URL('../docs/', import.meta.url).pathname;
 const port = Number(process.argv[2] || process.env.PORT || 8080);
 // необязательный префикс, как на GitHub Pages: node tools/serve.mjs 8080 /planner/
 const base = (process.argv[3] || '/').replace(/\/?$/, '/');
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
 
 createServer(async (req, res) => {
   try {
