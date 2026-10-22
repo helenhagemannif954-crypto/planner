@@ -69,8 +69,9 @@ button { cursor: pointer; }
   border-top: 1px solid var(--rule); padding-bottom: env(safe-area-inset-bottom);
 }
 .tabs button {
-  flex: 1; min-height: 56px; border: 0; background: none; color: var(--ink3);
-  font-size: 13.5px; letter-spacing: .01em; padding: 0 2px;
+  flex: 1 1 auto; min-width: 0; min-height: 56px; border: 0; background: none; color: var(--ink3);
+  font-size: 13px; letter-spacing: 0; padding: 0 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tabs button.on { color: var(--red); }
 

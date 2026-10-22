@@ -121,7 +121,7 @@ test('кэш service worker покрывает все файлы приложе�
   const sw = readFileSync('docs/sw.js', 'utf8');
   const listed = new Set([...sw.matchAll(/'([^']+\.(?:js|css|html|json|png|svg))'/g)].map((m) => m[1]));
   const walk = (dir) => readdirSync(dir).flatMap((f) => { const p = join(dir, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
-  const files = walk('docs').map((p) => p.slice(5)).filter((p) => p !== 'sw.js' && !p.startsWith('screens/'));
+  const files = walk('docs').map((p) => p.slice(5)).filter((p) => p !== 'sw.js' && !p.startsWith('screens/') && !p.startsWith('molitvoslov/')); // молитвослов — отдельное приложение со своим service worker
   for (const f of files) expect(listed.has(f), f).toBe(true);
 });
 
