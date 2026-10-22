@@ -1,0 +1,130 @@
+"""Проверка целостности содержимого молитвослова.
+
+Запуск (из корня репозитория):
+  python3 molitvoslov/tools/check_content.py
+
+Проверяет:
+  * у каждого текста есть source, century, translation_note и непустой text;
+  * идентификаторы молитв не повторяются;
+  * все ссылки на псалмы и песни (пулы чинов, темы, «Пс n:a–b» в стихах дня) существуют;
+  * тексты, которые в source целиком ссылаются на псалом («Пс 144:15–16»), совпадают с нашей Псалтирью;
+  * отрывки плана чтений: 3–12 стихов, 2–3 вопроса, ключевой стих внутри отрывка.
+Возвращает код 1, если найдена ошибка.
+"""
+import json, os, re, sys
+
+ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
+C = os.path.join(ROOT, 'docs', 'molitvoslov', 'content')
+load = lambda n: json.load(open(os.path.join(C, n + '.json'), encoding='utf-8'))
+
+errors, warnings = [], []
+psalms = {p['n']: p for p in load('psalms')['psalms']}
+odes = {o['id']: o for o in load('odes')['odes']}
+prayers, orders, themes, scripture = load('prayers'), load('orders'), load('themes'), load('scripture')
+
+PS = re.compile(r'^Пс (\d+):(\d+)(?:[–-](\d+))?$')
+
+def psalm_lines(n, a, b):
+    p = psalms.get(n)
+    if not p:
+        return None
+    vs = [v for v in p['verses'] if a <= v['n'] <= b]
+    if len(vs) != b - a + 1:
+        return None
+    return [l for v in vs for l in v['l']]
+
+def check_ref(ref, where):
+    m = PS.match(ref)
+    if m:
+        n, a = int(m.group(1)), int(m.group(2))
+        b = int(m.group(3) or a)
+        if psalm_lines(n, a, b) is None:
+            errors.append(f'{where}: нет стихов {ref}')
+
+norm = lambda s: re.sub(r'[^\wё]+', ' ', s.lower()).strip()
+
+# молитвы
+seen = set()
+items = list(prayers['fixed'].items()) + [(x['id'], x) for x in prayers['pool']]
+for pid, x in items:
+    if pid in seen:
+        errors.append(f'молитва {pid}: повтор id')
+    seen.add(pid)
+    for k in ('source', 'century', 'translation_note'):
+        if k not in x:
+            errors.append(f'молитва {pid}: нет поля {k}')
+    if not x.get('text'):
+        errors.append(f'молитва {pid}: пустой текст')
+    m = PS.match(x.get('source', ''))
+    if m:
+        n, a = int(m.group(1)), int(m.group(2))
+        lines = psalm_lines(n, a, int(m.group(3) or a))
+        if lines is None:
+            errors.append(f'молитва {pid}: нет стихов {x["source"]}')
+        elif norm(' '.join(lines)) != norm(' '.join(t for t in x['text'] if t)):
+            errors.append(f'молитва {pid}: текст расходится с Псалтирью ({x["source"]})\n    молитва: {" / ".join(x["text"])}\n    псалом:  {" / ".join(lines)}')
+
+# пулы псалмов в чинах
+for name, pool in orders['pools'].items():
+    for it in pool:
+        if isinstance(it, int):
+            if it not in psalms:
+                errors.append(f'пул {name}: нет псалма {it}')
+        elif str(it).startswith('ode:'):
+            if it[4:] not in odes:
+                errors.append(f'пул {name}: нет песни {it}')
+
+def walk_blocks(o, path):
+    if isinstance(o, dict):
+        if o.get('t') == 'psalm' and isinstance(o.get('n'), int) and o['n'] not in psalms:
+            errors.append(f'{path}: нет псалма {o["n"]}')
+        if o.get('t') == 'ode' and isinstance(o.get('id'), str) and o['id'] not in odes:
+            errors.append(f'{path}: нет песни {o["id"]}')
+        for k, v in o.items():
+            walk_blocks(v, path + '.' + str(k))
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            walk_blocks(v, f'{path}[{i}]')
+walk_blocks(orders['offices'], 'orders')
+
+# темы
+for t in themes['themes']:
+    for n in t.get('psalms', []):
+        if n not in psalms:
+            errors.append(f'тема {t["id"]}: нет псалма {n}')
+    check_ref(t['verse'], f'тема {t["id"]}')
+    if not PS.match(t['verse']) and t['verse'] not in scripture['verses']:
+        errors.append(f'тема {t["id"]}: стих {t["verse"]} не вписан (запустите fill_scripture.py)')
+
+# стихи в пулах Писания
+def walk_refs(o, path):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            walk_refs(v, path + '.' + k)
+    elif isinstance(o, list):
+        for v in o:
+            walk_refs(v, path)
+    elif isinstance(o, str):
+        if PS.match(o):
+            check_ref(o, path)
+        elif re.match(r'^(?:[123] )?[А-Я][а-яё]+ \d+:\d+', o) and o not in scripture['verses']:
+            errors.append(f'{path}: стих {o} не вписан (запустите fill_scripture.py)')
+walk_refs(scripture['pools'], 'scripture.pools')
+
+# план чтений
+for p in scripture['plan']:
+    n = len(p.get('verses', []))
+    if not 3 <= n <= 12:
+        errors.append(f'чтение {p["id"]} {p["ref"]}: {n} стихов')
+    elif n > 10:
+        warnings.append(f'чтение {p["id"]} {p["ref"]}: {n} стихов (больше десяти)')
+    q = len(p.get('q', []))
+    if not 2 <= q <= 3:
+        errors.append(f'чтение {p["id"]} {p["ref"]}: {q} вопросов')
+
+for w in warnings:
+    print('  ·', w)
+for e in errors:
+    print('  ✗', e)
+print(f'псалмов {len(psalms)}, молитв {len(items)}, чтений {len(scripture["plan"])}; ошибок {len(errors)}, замечаний {len(warnings)}')
+sys.exit(1 if errors else 0)
