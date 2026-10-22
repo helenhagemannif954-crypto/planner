@@ -74,7 +74,13 @@ export function settings() {
 
 export function setSetting(k, v) {
   get().settings[k] = v;
-  save();
+  flush();
+}
+
+// при сворачивании и закрытии — записать сразу, не дожидаясь таймера
+if (typeof document !== 'undefined') {
+  addEventListener('pagehide', () => { if (state) flush(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && state) flush(); });
 }
 
 /** Убрать старые записи: выборки старше 3 дней, журнал старше 60 дней */

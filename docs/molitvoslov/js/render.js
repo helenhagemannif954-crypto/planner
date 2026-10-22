@@ -167,7 +167,7 @@ const B = {
       ve.after(vrow);
     });
     tappable(sec, b, b.swap ? () => ctx.swap(b, sec) : null);
-    if (b.circleKey) ctx.observe(sec, () => markCircleShown(b.circleKey));
+    if (b.circleKey) { sec.dataset.circle = b.circleKey; ctx.observe(sec, () => markCircleShown(b.circleKey)); }
     return sec;
   },
 
