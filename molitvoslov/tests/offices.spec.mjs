@@ -66,10 +66,12 @@ test('Пасха: пасхальный вход', async ({ page }) => {
   expect(await officeText(page)).toContain('Господь истинно воскрес');
 });
 
-test('будни Четыредесятницы: молитва Ефрема с пометкой «традиционно приписывается»', async ({ page }) => {
+test('будни Четыредесятницы: молитва Ефрема — «Великопостная», авторство только с пометкой «традиционно приписывается»', async ({ page }) => {
   await open(page, 'pray/morning/normal', '2026-03-04T07:30');
   const t = await officeText(page);
   expect(t).toContain('суетного любопытства');
+  expect(t).toContain('Великопостная молитва');
+  expect(t).not.toContain('Молитва Ефрема');
   await page.locator('.pray .block', { hasText: 'суетного любопытства' }).first().click();
   await expect(page.locator('.pray')).toContainText('традиционно приписывается');
 });
@@ -98,4 +100,16 @@ test('объём правила: краткое короче обычного, �
   const short = await count('short'), normal = await count('normal'), full = await count('full');
   expect(short).toBeLessThan(normal);
   expect(full).toBeGreaterThan(normal);
+});
+
+test('авторская строка по касанию показывает «Составлено для приложения»', async ({ page }) => {
+  await open(page, 'pray/morning/normal', '2026-10-22T07:30');
+  const own = page.locator('.pray .block.own').first();
+  await own.locator('.direction').click();
+  await expect(own).toContainText('Составлено для приложения');
+  // заголовок часа — тоже авторский, со ссылкой на Евангелие
+  await open(page, 'pray/third/normal', '2026-10-22T09:30');
+  const head = page.locator('.pray .block.remembrance .head').first();
+  await head.click();
+  await expect(head).toContainText('Мк 15:25');
 });

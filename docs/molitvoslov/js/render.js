@@ -243,11 +243,11 @@ const B = {
 
   own(b, ctx) {
     if (ctx.plain) return null;
-    return h('section', { class: 'block own' }, rubric('Своими словами'), h('p', { class: 'direction' }, b.line), b.seconds ? h('div', { class: 'pause' }, timer(b.seconds, 'Своими словами')) : null);
+    return tappable(h('section', { class: 'block own' }, rubric('Своими словами'), h('p', { class: 'direction' }, b.line), b.seconds ? h('div', { class: 'pause' }, timer(b.seconds, 'Своими словами')) : null), b);
   },
 
   question(b, ctx) {
-    return h('section', { class: 'block own' }, h('p', { class: 'direction' }, b.line), !ctx.plain && b.seconds ? h('div', { class: 'pause' }, timer(b.seconds, 'Пауза')) : null);
+    return tappable(h('section', { class: 'block own' }, h('p', { class: 'direction' }, b.line), !ctx.plain && b.seconds ? h('div', { class: 'pause' }, timer(b.seconds, 'Пауза')) : null), b);
   },
 
   silence(b, ctx) {
@@ -261,7 +261,7 @@ const B = {
       sec.append(h('h3', { class: 'step' }, s.title), h('p', { class: 'direction' }, s.line));
       if (!ctx.plain && s.seconds) sec.append(h('div', { class: 'pause' }, timer(s.seconds, s.title)));
     }
-    return sec;
+    return tappable(sec, b);
   },
 
   verse(b, ctx) {
@@ -274,21 +274,23 @@ const B = {
   },
 
   remembrance(b, ctx) {
-    const sec = h('section', { class: 'block remembrance' }, rubric(b.rubric), h('p', { class: 'direction' }, b.line));
+    // заголовок часа — авторская строка, у неё свой источник; цитата ниже — со своим
+    const head = tappable(h('div', { class: 'head' }, rubric(b.rubric), h('p', { class: 'direction' }, b.line)), b);
+    const sec = h('section', { class: 'block remembrance' }, head);
     if (b.quote) sec.append(B.text(b.quote, ctx));
     return sec;
   },
 
   line(b) {
     if (!b.line) return null;
-    return h('section', { class: 'block line' }, rubric(b.rubric), h('p', { class: 'direction' }, b.line));
+    return tappable(h('section', { class: 'block line' }, rubric(b.rubric), h('p', { class: 'direction' }, b.line)), b);
   },
 
   dismissal(b) {
     const sec = h('section', { class: 'block dismissal' });
     if (b.bless) sec.append(stanzas(b.bless.lines, 'stanza bless'), h('p', { class: 'ref' }, b.bless.ref));
     if (b.line) sec.append(h('p', { class: 'direction end' }, b.line));
-    return sec;
+    return tappable(sec, b);
   },
 
   theme(b) {

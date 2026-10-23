@@ -63,6 +63,13 @@ function line(set, c, salt = '') {
   return arr[hash(c.day.key + salt + c.officeId) % arr.length];
 }
 
+/** Строка источника для авторских строк приложения; у строк-цитат — ещё и ссылка на Писание */
+function composedMeta(...texts) {
+  const refs = C.prayers.lines._refs || {};
+  const r = texts.flat().map((t) => refs[t]).filter(Boolean);
+  return { source: 'Составлено для приложения' + (r.length ? ' · ' + r.join('; ') : ''), century: '', note: '' };
+}
+
 function deep(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
 }
@@ -333,7 +340,8 @@ const R = {
   own(b, c) {
     const set = c.day.sunday && deep(C.prayers.lines.own, 'sunday') && b.set === 'morning' ? 'sunday' : b.set;
     const fromTheme = b.set === 'theme' && c.theme?.own;
-    return { t: 'own', line: fromTheme || line('own.' + set, c, 'own'), seconds: Math.round(c.st.silence * (b.k || 1)) };
+    const l = fromTheme || line('own.' + set, c, 'own');
+    return { t: 'own', line: l, seconds: Math.round(c.st.silence * (b.k || 1)), meta: composedMeta(l) };
   },
 
   silence(b, c) {
@@ -359,14 +367,18 @@ const R = {
   dismissal(b, c) {
     const blessRef = line(C.scripture.pools?.blessings || [], c, 'bless' + b.set);
     const bless = blessRef ? verseText(blessRef) : null;
-    return { t: 'dismissal', line: line('dismissal.' + b.set, c, 'dis'), bless: bless && b.blessing !== false ? bless : null };
+    const l = line('dismissal.' + b.set, c, 'dis');
+    const blessing = bless && b.blessing !== false ? bless : null;
+    const meta = composedMeta(l);
+    if (blessing) meta.source = 'Отпуст составлен для приложения; благословение — ' + blessing.ref;
+    return { t: 'dismissal', line: l, bless: blessing, meta };
   },
 
   review(b, c) {
     const set = C.prayers.lines.review[b.set || 'evening'];
     let steps = set.steps;
     if (c.day.noPenitence && set.sundaySteps) steps = set.sundaySteps;
-    return { t: 'review', rubric: set.title, steps: steps.map((s) => ({ ...s, seconds: Math.round(c.st.silence * (s.k || 0.5)) })) };
+    return { t: 'review', rubric: set.title, steps: steps.map((s) => ({ ...s, seconds: Math.round(c.st.silence * (s.k || 0.5)) })), meta: composedMeta(steps.map((s) => s.line)) };
   },
 
   verse(b, c, bkey) {
@@ -383,18 +395,19 @@ const R = {
     const head = C.prayers.lines.hours[String(b.hour)];
     const cands = prayerCandidates(c, { kind: 'word', moment: 'hour' + b.hour, state: null });
     const x = c.vol === 'short' ? null : pickFor(c, bkey, cands);
-    return { t: 'remembrance', rubric: head.title, line: head.line, quote: x ? textBlock(x, { rubric: '', swap: { kind: 'prayer', spec: { kind: 'word', moment: 'hour' + b.hour, state: null }, bkey } }) : null };
+    return { t: 'remembrance', rubric: head.title, line: head.line, meta: composedMeta(head.line), quote: x ? textBlock(x, { rubric: '', swap: { kind: 'prayer', spec: { kind: 'word', moment: 'hour' + b.hour, state: null }, bkey } }) : null };
   },
 
   line(b, c) {
-    return { t: 'line', rubric: b.rubric || '', line: line(b.set, c, b.set) };
+    const l = line(b.set, c, b.set);
+    return { t: 'line', rubric: b.rubric || '', line: l, meta: composedMeta(l) };
   },
 
   question(b, c) {
     const arr = b.set === 'theme' ? (c.theme?.questions || []) : b.set;
     const q = line(arr, c, 'q');
     if (!q) return null;
-    return { t: 'question', line: q, seconds: Math.round(c.st.silence * (b.k || 0.5)) };
+    return { t: 'question', line: q, seconds: Math.round(c.st.silence * (b.k || 0.5)), meta: composedMeta(q) };
   },
 
   themeverse(b, c) {
