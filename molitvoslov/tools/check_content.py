@@ -8,7 +8,9 @@
   * идентификаторы молитв не повторяются;
   * все ссылки на псалмы и песни (пулы чинов, темы, «Пс n:a–b» в стихах дня) существуют;
   * тексты, которые в source целиком ссылаются на псалом («Пс 144:15–16»), совпадают с нашей Псалтирью;
-  * отрывки плана чтений: 3–12 стихов, 2–3 вопроса, ключевой стих внутри отрывка.
+  * отрывки плана чтений: 3–12 стихов, 2–3 вопроса, ключевой стих внутри отрывка;
+  * цитаты в «ёлочках» в вопросах к чтениям есть в тексте отрывка (с точностью до регистра,
+    знаков и «ё»).
 Возвращает код 1, если найдена ошибка.
 """
 import json, os, re, sys
@@ -121,6 +123,20 @@ for p in scripture['plan']:
     q = len(p.get('q', []))
     if not 2 <= q <= 3:
         errors.append(f'чтение {p["id"]} {p["ref"]}: {q} вопросов')
+    if p.get('key') and p['key'] not in {f'{c}:{v}' for c, v, _ in p.get('verses', [])}:
+        errors.append(f'чтение {p["id"]} {p["ref"]}: ключевой стих {p["key"]} вне отрывка')
+
+# цитаты в вопросах — как в тексте отрывка
+plain = lambda s: norm(s.replace('ё', 'е').replace('Ё', 'Е').replace('́', ''))  # ударения Синодального: «ка́к»
+readings = scripture['plan'] + [p for g in scripture['special'].values() for p in g] + \
+    [p for g in scripture['readingPools'].values() for p in g]
+for p in readings:
+    body = ' ' + plain(' '.join(v[2] for v in p.get('verses', []))) + ' '
+    for q in p.get('q', []):
+        for quote in re.findall(r'«([^»]+)»', q):
+            for part in re.split(r'…|\.\.\.', quote):
+                if plain(part) and ' ' + plain(part) + ' ' not in body:
+                    errors.append(f'чтение {p["ref"]}: цитаты «{part.strip()}» нет в отрывке — {q}')
 
 for w in warnings:
     print('  ·', w)

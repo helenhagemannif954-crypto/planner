@@ -33,6 +33,23 @@ for (const off of offices) {
   }
 }
 
+for (const vol of ['short', 'full']) {
+  test(`объём «${vol}»: каждый чин в каждом состоянии собирается`, async ({ page }) => {
+    const errors = errorsOf(page);
+    await open(page, 'now');
+    await page.evaluate(async (v) => (await import('./js/store.js')).setSetting('volume', v), vol);
+    for (const off of offices) {
+      for (const state of off.states === false ? ['normal'] : ['normal', 'weary', 'hard']) {
+        for (const day of ['2026-10-21', '2026-03-04']) {
+          await open(page, `pray/${off.id}/${state}`, `${day}T08:00`);
+          await expect(page.locator('.pray'), `${off.id}/${state} ${day}`).toContainText('Аминь');
+        }
+      }
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 test('утро, обычное: вход, Пс 62, псалом по кругу, «Слава в вышних», чтение, Отче наш, отпуст', async ({ page }) => {
   await open(page, 'pray/morning/normal', '2026-10-22T07:30');
   const t = await officeText(page);

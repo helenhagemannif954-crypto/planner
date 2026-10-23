@@ -147,12 +147,13 @@ python3 molitvoslov/tools/build_psalms.py molitvoslov/source/psalms ПУТЬ/К/
 
 ```
 Мк 1:1–8 | Голос в пустыне | 3
-? Что во мне похоже на пустыню, где нужно приготовить путь?
+? Где во мне пустыня, в которой готовится путь Господу?
 ? Какие «стези» в моей жизни сейчас кривые?
 ```
 
 Первая строка: ссылка | название | ключевой стих (номер стиха или `глава:стих`). Строки с `?` —
-вопросы (2–3, от первого лица, без форм, выдающих род). Строки с `//` — комментарии.
+вопросы (2–3, от первого лица, без форм, выдающих род; слова в «ёлочках» — дословно из
+отрывка, это проверяет `check_content.py`). Строки с `//` — комментарии.
 
 ```
 python3 molitvoslov/tools/fill_scripture.py ПУТЬ/К/ru_synod.json molitvoslov/source/plan/*.txt
@@ -161,7 +162,7 @@ python3 molitvoslov/tools/fill_scripture.py ПУТЬ/К/ru_synod.json molitvoslo
 ## Проверки
 
 ```
-python3 molitvoslov/tools/check_content.py   # ссылки, поля, цитаты псалмов, длина отрывков
+python3 molitvoslov/tools/check_content.py   # ссылки, поля, цитаты псалмов и цитаты в вопросах, длина отрывков
 python3 molitvoslov/tools/check_gender.py    # авторские строки, которые могут выдавать род
 python3 molitvoslov/tools/sw_version.py      # версия кэша по содержимому файлов — после любой правки
 npx playwright test -c molitvoslov/tests/playwright.config.mjs   # экраны, чины, офлайн, установка

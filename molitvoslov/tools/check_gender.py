@@ -3,7 +3,8 @@
 import json, re, os, glob
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 C = os.path.join(ROOT, 'docs', 'molitvoslov', 'content')
-SUSPECT = re.compile(r'\b(я|мне|меня|сам|сама)\b.*?\b\w+(л|лся|ла|лась)\b|\b(сам|сама|готов|готова|рад|рада|должен|должна|уверен|уверена|один|одна)\b', re.I)
+# краткие прилагательные и причастия о говорящем («я верен», «я один», «стеснён»)
+SHORT = re.compile(r'\b(сама?|готова?|рада?|должна?|должен|уверена?|одинока?|одна|один|верна|верен|стеснена?|стеснён|виновата?|достойна?|достоин|свободна?|свободен|спокойна?|спокоен|больна?|болен)\b', re.I)
 PAST = re.compile(r'\b\w{3,}(ал|ял|ел|ил|ол|ул|ыл|ёл|ался|ялся|елся|ился|ла|лась)\b')
 
 def lines():
@@ -28,6 +29,6 @@ def lines():
 
 n = 0
 for where, l in lines():
-    if re.search(r'\bя\b', l, re.I) and PAST.search(l) or re.search(r'\b(сам|готов|рад|должен|уверен|одинок)\b', l, re.I):
+    if re.search(r'\bя\b', l, re.I) and PAST.search(l) or SHORT.search(l):
         print(f'{where}: {l}'); n += 1
 print('подозрительных строк:', n)
