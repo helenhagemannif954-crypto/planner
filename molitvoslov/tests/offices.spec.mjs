@@ -86,7 +86,7 @@ test('«Нет сил»: две-три минуты — короткий сти�
 test('«Тяжело»: псалом плача или песнь Ионы, тишина, утешение', async ({ page }) => {
   await open(page, 'pray/morning/hard', '2026-10-22T07:30');
   const t = await officeText(page);
-  expect(t).toContain('Боже, приди мне на помощь');
+  expect(t).toContain('Боже, внемли — помоги мне');
   expect(await page.locator('.pray .timer, .pray .pause').count()).toBeGreaterThan(0);
 });
 
