@@ -31,6 +31,7 @@ function fresh() {
     circle: { pos: 0, slots: {} },   // slots: {'2026-10-22:morning': {pos, shown}}
     picks: {},              // {'2026-10-22:morning:normal': {blockKey: id}}
     history: {},            // {id: 'YYYY-MM-DD'} — когда текст звучал последний раз
+    tourSeen: false,        // знакомство уже показано
   };
 }
 

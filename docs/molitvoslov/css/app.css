@@ -246,3 +246,40 @@ body.praying { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ——— знакомство (tour.js) ——— */
+.tour {
+  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.tour:focus { outline: none; }
+.tour-skip { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: 8px; z-index: 1; }
+.tour-track {
+  flex: 1; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.tour-track::-webkit-scrollbar { display: none; }
+.tour-slide {
+  flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: 56px 24px 12px; text-align: center; overflow-y: auto;
+}
+.tour-slide h2 { margin: 0 0 10px; font-size: 26px; font-weight: 500; line-height: 1.2; }
+.tour-slide > p { margin: 0; max-width: 22em; color: var(--ink2); font-size: 18px; line-height: 1.5; }
+.tour-art { width: 100%; max-width: 280px; margin: 0 auto 28px; color: var(--ink3); }
+.tour-art svg { display: block; width: 100%; height: auto; }
+.tour-art .accent { stroke: var(--red); }
+.tour-art .accent.fill { fill: var(--red); stroke: none; }
+.tour-ui { text-align: left; pointer-events: none; }
+.tour-ui .maincard { margin: 0; }
+.tour-ui .maincard h2 { font-size: 26px; }
+.tour-ui .btn { display: inline-flex; align-items: center; justify-content: center; }
+.tour-text { padding: 14px 16px; border-radius: 14px; background: var(--paper); box-shadow: var(--shadow); color: var(--ink); }
+.tour-text .rubric { font-size: 14px; }
+.tour-lines { margin: 0 0 10px; font-size: 18px; line-height: 1.4; }
+.tour-ui .hl { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); color: var(--ink); }
+.tour-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px 18px; }
+.tour-dots { display: flex; gap: 7px; }
+.tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--rule); transition: background .2s; }
+.tour-dots span.on { background: var(--red); }
+.tour-next { min-width: 9.5em; }

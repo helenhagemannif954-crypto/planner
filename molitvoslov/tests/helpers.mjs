@@ -9,8 +9,20 @@ export function errorsOf(page) {
   return errors;
 }
 
+// знакомство при первом открытии в проверках не нужно (его проверяет tour.spec.mjs):
+// в чистом браузере сразу отмечаем, что оно уже показано
+const quiet = new WeakSet();
+export async function skipTour(page) {
+  if (quiet.has(page)) return;
+  quiet.add(page);
+  await page.addInitScript(() => {
+    try { if (!localStorage.getItem('molitvoslov.v1')) localStorage.setItem('molitvoslov.v1', JSON.stringify({ v: 1, tourSeen: true })); } catch {}
+  });
+}
+
 /** Открыть экран; now — «сейчас» в формате 2026-10-22T07:30. */
 export async function open(page, hash = 'now', now = '2026-10-22T07:30') {
+  await skipTour(page);
   await page.goto(`./?now=${now}#${hash}`);
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 15000 });
   await page.waitForTimeout(150);

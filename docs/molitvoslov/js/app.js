@@ -7,6 +7,7 @@ import { dayInfo, dateTitle, officeForTime, officesOfDay, weekTheme } from './ca
 import { buildOffice, peekReading } from './office.js';
 import { renderOffice, renderBlock } from './render.js';
 import { downloadReminders } from './ics.js';
+import { showTour } from './tour.js';
 
 const app = document.getElementById('app');
 const VERSION = '1.0.0';
@@ -293,6 +294,7 @@ function screenSettings() {
     installEvent ? h('div', { class: 'states' }, h('button', { type: 'button', class: 'btn primary', onclick: async () => { installEvent.prompt(); installEvent = null; } }, 'Установить на телефон')) : null,
     h('h3', { class: 'sect' }, 'О молитвослове'),
     h('p', { class: 'muted' }, 'Молитвенный чин Церкви первых четырёх веков. Псалмы, песни и молитвы — в новом переводе; чтения — по Синодальному переводу. Источник каждого текста — мелко под ним, по касанию.'),
+    h('div', { class: 'states' }, h('button', { type: 'button', class: 'btn', onclick: () => showTour({ onStart: startNow }) }, 'Как пользоваться')),
     h('p', { class: 'muted' }, 'Версия ' + VERSION),
   ];
   page('settings', 'Настройки', body, { back: true, settings: false });
@@ -349,6 +351,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 const STATE_LABEL = { normal: '', weary: 'Нет сил', hard: 'Тяжело' };
+
+/** «Начать молитву» из знакомства: чин, который «Сейчас» предлагает по времени */
+function startNow() {
+  openOffice(officeForTime(now(), store.settings()), 'normal');
+}
 
 function openOffice(id, state, opts = {}) {
   const extra = opts.themeId ? '/' + opts.themeId : '';
@@ -420,6 +427,13 @@ async function boot() {
   }
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   render();
+  // знакомство — один раз, при первом открытии (отмечается сразу: закрыть приложение посреди
+  // знакомства тоже значит «уже видел»; снова — «Как пользоваться» в настройках)
+  if (!store.get().tourSeen) {
+    store.get().tourSeen = true;
+    store.save();
+    showTour({ onStart: startNow });
+  }
   window.__ready = true;
 }
 
