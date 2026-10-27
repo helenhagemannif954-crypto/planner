@@ -154,7 +154,7 @@ for k, n in sorted(starts.items(), key=lambda x: -x[1]):
 # «Псалмы на всякую нужду»: только вычитанные псалмы, 3–8 в группе, цитаты — дословно из Псалтири
 needs = load('needs')
 checked = set()
-for l in open(os.path.join(ROOT, 'molitvoslov', 'source', 'psalms', 'checked.txt'), encoding='utf-8'):
+for l in open(os.path.join(ROOT, 'molitvoslov', 'source', 'checked-psalms.txt'), encoding='utf-8'):
     if l.strip() and not l.startswith('#'):
         checked |= {int(x) for x in re.findall(r'\b\d+\b', l.split(':', 1)[1])}
 for g in needs['groups']:
@@ -165,7 +165,7 @@ for g in needs['groups']:
         if n not in psalms:
             errors.append(f'нужда {g["id"]}: нет псалма {n}'); continue
         if n not in checked:
-            errors.append(f'нужда {g["id"]}: Пс {n} ещё не вычитан (нет в checked.txt)')
+            errors.append(f'нужда {g["id"]}: Пс {n} ещё не вычитан (нет в checked-psalms.txt)')
         body = ' ' + plain(' '.join(l for v in psalms[n]['verses'] for l in v['l'])) + ' '
         for quote in re.findall(r'«([^»]+)»', x['line']):
             for part in re.split(r'…', quote):
