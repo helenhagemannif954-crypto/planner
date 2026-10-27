@@ -12,6 +12,7 @@
 | `REPORT.md` | что сделано, что осталось, ссылка |
 | `source/psalms/*.txt` | исходники перевода Псалтири |
 | `source/plan/*.txt` | план последовательного чтения с вопросами |
+| `source/checked-psalms.txt` | какие псалмы вычитаны стих за стихом (партиями) |
 | `tools/` | сборка и проверка содержимого |
 | `tests/` | тесты Playwright |
 
@@ -89,6 +90,13 @@
   их текст — в `verses`, стихи псалмов берутся из нашей Псалтири.
 - `books` — полные названия книг.
 
+### `needs.json`
+
+«Псалмы на всякую нужду»: `groups: [{ id, title, items: [{ n, line }] }]`, `title`, `intro`. В группе
+3–8 псалмов. В раздел идут только вычитанные псалмы, их список —
+`molitvoslov/source/checked-psalms.txt` (строка на партию вычитки). Слова в «ёлочках» в `line` —
+дословно из Псалтири приложения. Оба правила проверяет `check_content.py`.
+
 ### `orders.json`
 
 `offices` — чины. У чина: `id`, `title`, `when`, `subtitle`, `states` (`false` — без выбора
@@ -165,6 +173,7 @@ python3 molitvoslov/tools/fill_scripture.py ПУТЬ/К/ru_synod.json molitvoslo
 python3 molitvoslov/tools/check_content.py   # ссылки, поля, цитаты псалмов и цитаты в вопросах, длина отрывков
 python3 molitvoslov/tools/check_gender.py    # авторские строки, которые могут выдавать род
 python3 molitvoslov/tools/sw_version.py      # версия кэша по содержимому файлов — после любой правки
+python3 molitvoslov/tools/apply_psalter_review.py ОТЧЁТ.md   # правки рецензента Псалтири (см. tools/psalter-review-prompt.md)
 npx playwright test -c molitvoslov/tests/playwright.config.mjs   # экраны, чины, офлайн, установка
 ```
 
