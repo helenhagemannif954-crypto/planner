@@ -54,7 +54,7 @@ test('каждый день года: у каждого блока каждог�
       store.setSetting('volume', vol);
       for (let d = new Date(2026, 0, 1, 8); d.getFullYear() === 2026; d.setDate(d.getDate() + (vol === 'normal' ? 1 : 3))) {
         for (const off of C.orders.offices) {
-          for (const state of off.states === false ? ['normal'] : ['normal', 'weary', 'hard']) {
+          for (const state of Array.isArray(off.states) ? off.states : off.states === false ? ['normal'] : ['normal', 'weary', 'hard']) {
             const o = buildOffice(off.id, state, new Date(d));
             if (!o.blocks.length) bad(`${d.toISOString().slice(0, 10)} ${off.id}/${state}`, { t: '—' }, 'пустой чин');
             for (const b of o.blocks) { check(`${d.toISOString().slice(0, 10)} ${off.id}/${state}/${vol}`, b); n++; }

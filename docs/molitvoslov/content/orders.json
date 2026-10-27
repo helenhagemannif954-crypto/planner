@@ -1,5 +1,5 @@
 {
-  "_about": "Чины как последовательность блоков. t — тип блока; vol — для каких объёмов правила (short/normal/full; без vol — для всех); if — условия дня (penitent, sunday, paschal, lentWeekday, pinned, unpinned, am, pm; «!» — отрицание). Пояснение типов — в molitvoslov/README.md.",
+  "_about": "Чины как последовательность блоков. t — тип блока; vol — для каких объёмов правила (short/normal/full; без vol — для всех); if — условия дня (penitent, sunday, paschal, lentWeekday, pinned, unpinned, am, pm; «!» — отрицание). Пояснение типов — в molitvoslov/README.md. group — раздел в «Чинах»; states — список вариантов вместо «обычно / нет сил / тяжело» (stateLabels — их подписи); при таком состоянии объём правила равен ему самому (full/short).",
   "offices": [
     {
       "id": "morning",
@@ -752,6 +752,248 @@
           }
         ]
       }
+    },
+    {
+      "id": "communion-eve",
+      "title": "Накануне вечером",
+      "when": "вечер перед Причащением",
+      "subtitle": "Испытание себя · примирение · покаянные псалмы · молитвы «Постановлений» и Серапиона",
+      "group": "communion",
+      "states": [
+        "full",
+        "short"
+      ],
+      "stateLabels": {
+        "full": "Полное",
+        "short": "Краткое"
+      },
+      "plans": {
+        "normal": [
+          {
+            "t": "text",
+            "id": "entry-communion-eve"
+          },
+          {
+            "t": "verse",
+            "pool": "communion.examine",
+            "rubric": "Испытание себя"
+          },
+          {
+            "t": "line",
+            "set": "communion.examine"
+          },
+          {
+            "t": "silence",
+            "k": 2
+          },
+          {
+            "t": "verse",
+            "pool": "communion.reconcile",
+            "rubric": "Примирение"
+          },
+          {
+            "t": "text",
+            "id": "did-14",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "question",
+            "set": "communion.reconcile",
+            "k": 1
+          },
+          {
+            "t": "psalm",
+            "n": 50
+          },
+          {
+            "t": "psalm",
+            "pool": "penitential",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "serapion-knees"
+          },
+          {
+            "t": "text",
+            "id": "ac-8-37",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "own",
+            "set": "communionEve",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "dismissal",
+            "set": "communionEve"
+          }
+        ]
+      }
+    },
+    {
+      "id": "communion-morning",
+      "title": "Утром перед Литургией",
+      "when": "утро дня Причащения",
+      "subtitle": "Пс 22 · Пс 33 · Пс 144 · молитва перед Причащением · благодарения Дидахе",
+      "group": "communion",
+      "states": [
+        "full",
+        "short"
+      ],
+      "stateLabels": {
+        "full": "Полное",
+        "short": "Краткое"
+      },
+      "plans": {
+        "normal": [
+          {
+            "t": "text",
+            "id": "entry-communion-morning"
+          },
+          {
+            "t": "psalm",
+            "n": 22,
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "line",
+            "set": "communion.ps33"
+          },
+          {
+            "t": "psalm",
+            "n": 33
+          },
+          {
+            "t": "psalm",
+            "n": 144,
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "ac-8-13-10"
+          },
+          {
+            "t": "text",
+            "id": "ac-8-13-12"
+          },
+          {
+            "t": "text",
+            "id": "did-9",
+            "vol": [
+              "full"
+            ],
+            "rubric": "Благодарение (Дидахе 9)"
+          },
+          {
+            "t": "text",
+            "id": "did-10b",
+            "vol": [
+              "full"
+            ],
+            "rubric": "Если кто свят — пусть приходит (Дидахе 10)"
+          },
+          {
+            "t": "silence",
+            "k": 2
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "dismissal",
+            "set": "communionMorning"
+          }
+        ]
+      }
+    },
+    {
+      "id": "communion-after",
+      "title": "После Причащения",
+      "when": "в тот же день",
+      "subtitle": "Благодарения «Постановлений» и Дидахе · песнь Симеона · Пс 102",
+      "group": "communion",
+      "states": [
+        "full",
+        "short"
+      ],
+      "stateLabels": {
+        "full": "Полное",
+        "short": "Краткое"
+      },
+      "plans": {
+        "normal": [
+          {
+            "t": "text",
+            "id": "entry-communion-after"
+          },
+          {
+            "t": "text",
+            "id": "ac-8-14-2",
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "text",
+            "id": "ac-8-15-2"
+          },
+          {
+            "t": "text",
+            "id": "did-10a",
+            "vol": [
+              "full"
+            ],
+            "rubric": "Благодарение (Дидахе 10)"
+          },
+          {
+            "t": "ode",
+            "id": "symeon"
+          },
+          {
+            "t": "psalm",
+            "n": 102,
+            "vol": [
+              "full"
+            ]
+          },
+          {
+            "t": "psalm",
+            "n": 102,
+            "from": 1,
+            "to": 5,
+            "vol": [
+              "short"
+            ]
+          },
+          {
+            "t": "own",
+            "set": "communionAfter"
+          },
+          {
+            "t": "lord"
+          },
+          {
+            "t": "dismissal",
+            "set": "communionAfter"
+          }
+        ]
+      }
     }
   ],
   "pools": {
@@ -789,6 +1031,14 @@
       150,
       116,
       46
+    ],
+    "penitential": [
+      6,
+      31,
+      37,
+      101,
+      129,
+      142
     ]
   }
 }

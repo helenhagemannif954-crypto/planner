@@ -10,7 +10,7 @@
   * тексты, которые в source целиком ссылаются на псалом («Пс 144:15–16»), совпадают с нашей Псалтирью;
   * отрывки плана чтений: 3–12 стихов, 2–3 вопроса, ключевой стих внутри отрывка;
   * цитаты в «ёлочках» в вопросах к чтениям есть в тексте отрывка (с точностью до регистра,
-    знаков и «ё»).
+    знаков и «ё»), не длиннее 12 слов, ни одно начало (три слова) не чаще 3 % вопросов.
 Возвращает код 1, если найдена ошибка.
 """
 import json, os, re, sys
@@ -137,6 +137,19 @@ for p in readings:
             for part in re.split(r'…|\.\.\.', quote):
                 if plain(part) and ' ' + plain(part) + ' ' not in body:
                     errors.append(f'чтение {p["ref"]}: цитаты «{part.strip()}» нет в отрывке — {q}')
+        if len(re.findall(r'[\wё]+', q)) > 12:
+            errors.append(f'чтение {p["ref"]}: вопрос длиннее 12 слов — {q}')
+
+# вопросы не начинаются одинаково: ни одно начало (первые три слова) — не чаще 3 % вопросов
+starts = {}
+for p in readings:
+    for q in p.get('q', []):
+        k = ' '.join(re.findall(r'[\wё]+', q.lower())[:3])
+        starts[k] = starts.get(k, 0) + 1
+total = sum(starts.values())
+for k, n in sorted(starts.items(), key=lambda x: -x[1]):
+    if n > total * 0.03:
+        errors.append(f'вопросы: начало «{k}…» — {n} из {total} (больше 3 %)')
 
 for w in warnings:
     print('  ·', w)

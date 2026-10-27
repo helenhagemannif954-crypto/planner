@@ -76,6 +76,9 @@ const OFFICE_NAMES = () => Object.fromEntries(C.orders.offices.map((o) => [o.id,
 
 function stateButtons(officeId, { big = true } = {}) {
   const off = C.office[officeId];
+  // свой список вариантов (правило ко Причащению: «Полное» и «Краткое»)
+  if (Array.isArray(off.states)) return h('div', { class: 'states' }, off.states.map((s, i) =>
+    h('button', { type: 'button', class: 'btn' + (i === 0 ? ' primary' : '') + (big ? '' : ' small'), onclick: () => openOffice(officeId, s) }, off.stateLabels?.[s] || s)));
   if (off.states === false) return h('div', { class: 'states' }, h('button', { type: 'button', class: 'btn primary', onclick: () => openOffice(officeId, 'normal') }, 'Начать'));
   return h('div', { class: 'states' },
     h('button', { type: 'button', class: 'btn primary' + (big ? '' : ' small'), onclick: () => openOffice(officeId, 'normal') }, 'Начать'),
@@ -125,13 +128,27 @@ function screenNow() {
 }
 
 // ——— «Чины» ———
+const GROUPS = {
+  communion: { title: 'Ко Причащению', line: 'Накануне вечером, утром перед Литургией и после Причащения — по молитвам Церкви первых веков.' },
+};
+
 function screenOrders() {
   const st = store.settings();
   const list = C.orders.offices.filter((o) => !o.hidden);
-  page('orders', 'Чины', list.map((o) => h('section', { class: 'card' },
-    h('h2', {}, o.title), o.when ? h('p', { class: 'when' }, o.when) : null,
-    o.subtitle ? h('p', { class: 'subtitle' }, o.subtitle) : null,
-    stateButtons(o.id, { big: false }))));
+  const body = [];
+  let group = null;
+  for (const o of list) {
+    if ((o.group || null) !== group) {
+      group = o.group || null;
+      const g = GROUPS[group];
+      if (g) body.push(h('h3', { class: 'sect' }, g.title), h('p', { class: 'muted' }, g.line));
+    }
+    body.push(h('section', { class: 'card' },
+      h('h2', {}, o.title), o.when ? h('p', { class: 'when' }, o.when) : null,
+      o.subtitle ? h('p', { class: 'subtitle' }, o.subtitle) : null,
+      stateButtons(o.id, { big: false })));
+  }
+  page('orders', 'Чины', body);
 }
 
 // ——— «Темы» ———
@@ -371,7 +388,7 @@ function screenPray(id, state, themeId) {
   const title = themeId ? `${off.title}: ${C.theme[themeId]?.title || ''}` : off.title;
   art.append(h('header', { class: 'office-head' },
     h('h1', {}, title),
-    h('p', { class: 'odate' }, [dateTitle(d), STATE_LABEL[office.state]].filter(Boolean).join(' · '))));
+    h('p', { class: 'odate' }, [dateTitle(d), (off.stateLabels || STATE_LABEL)[office.state]].filter(Boolean).join(' · '))));
   const wrap = h('div', { class: 'pray', role: 'dialog', 'aria-label': title });
   const close = () => { keepAwake(false); history.length > 1 ? history.back() : go('now', true); };
   const bar = h('div', { class: 'praybar' }, h('button', { type: 'button', class: 'icon', 'aria-label': 'Закрыть молитву', onclick: close }, '×'));

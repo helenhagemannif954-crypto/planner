@@ -17,7 +17,7 @@ const days = {
 };
 
 for (const off of offices) {
-  const states = off.states === false ? ['normal'] : ['normal', 'weary', 'hard'];
+  const states = Array.isArray(off.states) ? off.states : off.states === false ? ['normal'] : ['normal', 'weary', 'hard'];
   for (const state of states) {
     test(`${off.title} · ${state}: собирается во все дни`, async ({ page }) => {
       const errors = errorsOf(page);
@@ -39,7 +39,7 @@ for (const vol of ['short', 'full']) {
     await open(page, 'now');
     await page.evaluate(async (v) => (await import('./js/store.js')).setSetting('volume', v), vol);
     for (const off of offices) {
-      for (const state of off.states === false ? ['normal'] : ['normal', 'weary', 'hard']) {
+      for (const state of Array.isArray(off.states) ? off.states : off.states === false ? ['normal'] : ['normal', 'weary', 'hard']) {
         for (const day of ['2026-10-21', '2026-03-04']) {
           await open(page, `pray/${off.id}/${state}`, `${day}T08:00`);
           await expect(page.locator('.pray'), `${off.id}/${state} ${day}`).toContainText('Аминь');
@@ -129,4 +129,48 @@ test('авторская строка по касанию показывает �
   const head = page.locator('.pray .block.remembrance .head').first();
   await head.click();
   await expect(head).toContainText('Мк 15:25');
+});
+
+test('правило ко Причащению: раздел в «Чинах», три части, полное длиннее краткого', async ({ page }) => {
+  const errors = errorsOf(page);
+  await open(page, 'orders');
+  await expect(page.locator('.sect', { hasText: 'Ко Причащению' })).toHaveCount(1);
+  const parts = { 'communion-eve': 'Накануне вечером', 'communion-morning': 'Утром перед Литургией', 'communion-after': 'После Причащения' };
+  for (const title of Object.values(parts)) {
+    const card = page.locator('.card', { has: page.locator('h2', { hasText: title }) });
+    await expect(card.getByRole('button', { name: 'Полное' })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Краткое' })).toBeVisible();
+  }
+  const count = {};
+  for (const id of Object.keys(parts)) {
+    for (const vol of ['full', 'short']) {
+      await open(page, `pray/${id}/${vol}`, '2026-10-24T20:00');
+      await expect(page.locator('.office-head .odate')).toContainText(vol === 'full' ? 'Полное' : 'Краткое');
+      await expect(page.locator('.pray')).toContainText('Отче наш');
+      count[id + vol] = await page.locator('.pray .block').count();
+    }
+    expect(count[id + 'full'], id).toBeGreaterThan(count[id + 'short']);
+  }
+  // главное в каждой части
+  await open(page, 'pray/communion-eve/full', '2026-10-24T20:00');
+  let t = await officeText(page);
+  expect(t).toContain('Да испытывает же себя человек');
+  expect(t).toContain('пойди прежде примирись');
+  expect(t).toContain('пока они не примирятся'); // Дидахе 14
+  expect(t).toContain('Помилуй меня, Боже');
+  await open(page, 'pray/communion-morning/short', '2026-10-25T07:30');
+  t = await officeText(page);
+  expect(t).toContain('Благословлю Господа во всякое время'); // Пс 33
+  expect(t).toContain('Святое — святым');
+  await open(page, 'pray/communion-after/short', '2026-10-25T12:00');
+  t = await officeText(page);
+  expect(t).toContain('удостоил нас');
+  expect(t).toMatch(/Теперь Ты отпускаешь/);
+  // связующая строка о Пс 33 — с пометкой и ссылкой на свидетельства
+  await open(page, 'pray/communion-morning/full', '2026-10-25T07:30');
+  const ln = page.locator('.pray .block.line', { hasText: 'Этот псалом пели' });
+  await ln.click();
+  await expect(ln).toContainText('Составлено для приложения');
+  await expect(ln).toContainText('VIII.13');
+  expect(errors).toEqual([]);
 });
