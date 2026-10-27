@@ -2,7 +2,7 @@
 // Никаких счётчиков и статистики: только настройки, помянник, избранное
 // и указатели «где остановился» (для неповторяемости).
 
-import { dayKey, addDays } from './util.js';
+import { dayKey, addDays, now } from './util.js';
 
 const KEY = 'molitvoslov.v1';
 
@@ -85,7 +85,7 @@ if (typeof document !== 'undefined') {
 
 /** Убрать старые записи: выборки старше 3 дней, журнал старше 60 дней */
 function prune() {
-  const today = new Date();
+  const today = now(); // «сейчас» приложения (в проверках — из ?now=)
   const cutPick = dayKey(addDays(today, -3));
   for (const k of Object.keys(state.picks)) if (k.slice(0, 10) < cutPick) delete state.picks[k];
   for (const k of Object.keys(state.circle.slots)) if (k.slice(0, 10) < cutPick) delete state.circle.slots[k];

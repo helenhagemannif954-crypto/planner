@@ -310,12 +310,15 @@ export function renderBlock(b, ctx) {
 export function renderOffice(office, root, { onClose } = {}) {
   const st = store.settings();
   const seen = new Map();
+  // блок «показан», когда видно 15 % его — или, если он выше экрана (длинное чтение крупным
+  // шрифтом), когда он занял 40 % экрана: иначе высокий блок никогда не наберёт 15 %
+  const shown = (e) => e.intersectionRatio >= 0.15 || e.intersectionRect.height >= 0.4 * (e.rootBounds?.height || innerHeight);
   const io = 'IntersectionObserver' in window ? new IntersectionObserver((ents) => {
-    for (const e of ents) if (e.isIntersecting) {
+    for (const e of ents) if (e.isIntersecting && shown(e)) {
       const f = seen.get(e.target);
       if (f) { f(); seen.delete(e.target); io.unobserve(e.target); }
     }
-  }, { threshold: 0.15 }) : null;
+  }, { threshold: Array.from({ length: 16 }, (_, i) => i / 100) }) : null;
   const ctx = {
     plain: st.readMode === 'plain',
     observe(el, f) { if (io) { seen.set(el, f); io.observe(el); } else f(); },
