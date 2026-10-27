@@ -74,6 +74,8 @@ button { cursor: pointer; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tabs button.on { color: var(--red); }
+/* шесть разделов на самом узком экране: подписи чуть мельче, чтобы не обрезались */
+@media (max-width: 360px) { .tabs button { font-size: 11.5px; } }
 
 .date { margin: 6px 0 0; font-size: 19px; }
 .season { margin: 2px 0 0; color: var(--red); font-size: 15px; font-variant: all-small-caps; letter-spacing: .06em; }

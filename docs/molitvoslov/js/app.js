@@ -40,6 +40,7 @@ const TABS = [
   ['now', 'Сейчас'],
   ['orders', 'Чины'],
   ['themes', 'Темы'],
+  ['needs', 'Псалмы'],
   ['fav', 'Избранное'],
   ['names', 'Помянник'],
 ];
@@ -160,6 +161,28 @@ function screenThemes() {
       h('span', { class: 'rt' }, t.title, t.id === cur ? h('span', { class: 'badge' }, 'эта седмица') : null),
       h('span', { class: 'rs' }, t.line))))),
   ]);
+}
+
+// ——— «Псалмы на всякую нужду» ———
+function screenNeeds() {
+  const N = C.needs;
+  page('needs', 'Псалмы', [
+    h('p', { class: 'lead' }, N.title),
+    h('p', { class: 'muted' }, N.intro),
+    h('ul', { class: 'list' }, N.groups.map((g) => h('li', {}, h('button', { type: 'button', class: 'row', onclick: () => go('need/' + g.id) },
+      h('span', { class: 'rt' }, g.title),
+      h('span', { class: 'rs' }, g.items.map((x) => 'Пс ' + x.n).join(', ')))))),
+  ]);
+}
+
+function screenNeed(id) {
+  const g = C.needs.groups.find((x) => x.id === id);
+  if (!g) return go('needs', true);
+  page('needs', g.title, [
+    h('ul', { class: 'list' }, g.items.map((x) => h('li', {}, h('button', { type: 'button', class: 'row', onclick: () => go(`read/psalm/${x.n}`) },
+      h('span', { class: 'rt' }, `Псалом ${x.n}`),
+      h('span', { class: 'rs' }, x.line))))),
+  ], { back: true });
 }
 
 function screenTheme(id) {
@@ -418,6 +441,8 @@ function render() {
     case 'now': return screenNow();
     case 'orders': return screenOrders();
     case 'themes': return screenThemes();
+    case 'needs': return screenNeeds();
+    case 'need': return screenNeed(rest[0]);
     case 'theme': return screenTheme(rest[0]);
     case 'fav': return screenFav();
     case 'names': return screenNames();

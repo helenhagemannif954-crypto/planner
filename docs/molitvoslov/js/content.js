@@ -1,6 +1,6 @@
 // Загрузка текстов из content/*.json и указатели по ним.
 
-const FILES = ['psalms', 'odes', 'prayers', 'scripture', 'orders', 'themes'];
+const FILES = ['psalms', 'odes', 'prayers', 'scripture', 'orders', 'themes', 'needs'];
 
 export const C = {};
 

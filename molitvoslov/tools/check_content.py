@@ -151,6 +151,27 @@ for k, n in sorted(starts.items(), key=lambda x: -x[1]):
     if n > total * 0.03:
         errors.append(f'вопросы: начало «{k}…» — {n} из {total} (больше 3 %)')
 
+# «Псалмы на всякую нужду»: только вычитанные псалмы, 3–8 в группе, цитаты — дословно из Псалтири
+needs = load('needs')
+checked = set()
+for l in open(os.path.join(ROOT, 'molitvoslov', 'source', 'psalms', 'checked.txt'), encoding='utf-8'):
+    if l.strip() and not l.startswith('#'):
+        checked |= {int(x) for x in re.findall(r'\b\d+\b', l.split(':', 1)[1])}
+for g in needs['groups']:
+    if not 3 <= len(g['items']) <= 8:
+        errors.append(f'нужда {g["id"]}: {len(g["items"])} псалмов (нужно 3–8)')
+    for x in g['items']:
+        n = x['n']
+        if n not in psalms:
+            errors.append(f'нужда {g["id"]}: нет псалма {n}'); continue
+        if n not in checked:
+            errors.append(f'нужда {g["id"]}: Пс {n} ещё не вычитан (нет в checked.txt)')
+        body = ' ' + plain(' '.join(l for v in psalms[n]['verses'] for l in v['l'])) + ' '
+        for quote in re.findall(r'«([^»]+)»', x['line']):
+            for part in re.split(r'…', quote):
+                if plain(part) and ' ' + plain(part) + ' ' not in body:
+                    errors.append(f'нужда {g["id"]}: цитаты «{part.strip()}» нет в Пс {n}')
+
 for w in warnings:
     print('  ·', w)
 for e in errors:
