@@ -120,7 +120,7 @@ export function weekTheme(date, themes) {
  */
 export function officeForTime(date, st) {
   const m = minutesOf(date);
-  if (m < 4 * 60) return st.night ? 'night' : 'sleep';
+  if (m < 4 * 60) return 'night';
   if (m < 10 * 60) return 'morning';
   if (st.hours) {
     if (m < 11 * 60 + 30) return 'third';
@@ -138,7 +138,6 @@ export function officeForTime(date, st) {
 export function officesOfDay(st) {
   const list = ['morning'];
   if (st.hours) list.push('third', 'sixth', 'ninth');
-  list.push('evening', 'sleep');
-  if (st.night) list.push('night');
+  list.push('evening', 'sleep', 'night');
   return list;
 }

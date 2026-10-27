@@ -12,7 +12,6 @@ export const DEFAULT_SETTINGS = {
   volume: 'normal',      // short | normal | full — объём правила
   pinPsalms: true,       // Пс 62 утром, Пс 140 вечером
   hours: true,           // третий, шестой, девятый часы
-  night: false,          // полунощная молитва
   noRepeatDays: 14,      // молитва не повторяется N дней
   silence: 60,           // секунд тишины
   readMode: 'normal',    // normal | slow | plain («только чтение»)

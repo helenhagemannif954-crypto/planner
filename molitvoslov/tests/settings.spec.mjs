@@ -16,14 +16,29 @@ test('размер шрифта, тема, объём и длительност�
   expect(errors).toEqual([]);
 });
 
-test('часы и полунощная молитва включаются и выключаются', async ({ page }) => {
+test('полунощная молитва — наравне с остальными: без переключателя, в «Чинах», в «Сегодня», ночью предлагается сама', async ({ page }) => {
   await open(page, 'settings');
-  const night = page.getByRole('switch', { name: /Полунощная молитва/ });
-  await expect(night).not.toBeChecked();
-  await night.check();
-  await page.reload();
-  await page.waitForFunction(() => window.__ready === true);
-  await expect(page.getByRole('switch', { name: /Полунощная молитва/ })).toBeChecked();
+  await expect(page.getByRole('switch', { name: /Полунощная/ })).toHaveCount(0);
+  await open(page, 'orders');
+  await expect(page.locator('.card h2', { hasText: 'Полунощная' })).toHaveCount(1);
+  await expect(page.locator('.card', { hasText: 'Полунощная' })).not.toContainText('настройках');
+  await open(page, 'now', '2026-10-22T07:30');
+  await expect(page.locator('.list .row .rt', { hasText: 'Полунощная' })).toHaveCount(1);
+  await open(page, 'now', '2026-10-23T02:30');
+  await expect(page.locator('.maincard h2')).toContainText('Полунощная');
+});
+
+test('тема седмицы на главном экране — кнопка, которая сразу открывает молитву по теме', async ({ page }) => {
+  await open(page, 'now', '2026-10-22T07:30');
+  const btn = page.locator('.themecard').getByRole('button', { name: /Молиться по теме/ });
+  await expect(btn).toBeVisible();
+  // вид — как у кнопок чинов («Нет сил», «Тяжело»)
+  const look = (l) => l.evaluate((e) => { const s = getComputedStyle(e); return [s.borderTopWidth, s.borderTopStyle, s.borderRadius, s.minHeight, s.fontSize]; });
+  expect(await look(btn)).toEqual(await look(page.locator('.maincard').getByRole('button', { name: 'Нет сил' })));
+  await btn.click();
+  await page.waitForFunction(() => location.hash.startsWith('#pray/theme/normal/'));
+  await expect(page.locator('.pray .block.verse-b').first()).toBeVisible();
+  await expect(page.locator('.office-head h1')).toContainText('Тема седмицы');
 });
 
 test('напоминания выключены по умолчанию и не просят разрешений', async ({ page }) => {

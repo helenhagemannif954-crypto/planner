@@ -95,10 +95,12 @@ function screenNow() {
   if (info.label) body.push(h('p', { class: 'season' }, info.label));
   if (theme) {
     const v = verseText(theme.verse);
-    body.push(h('div', { class: 'themecard', role: 'button', tabindex: '0', onclick: () => go('theme/' + theme.id) },
+    // тема седмицы — кнопкой того же вида, что «Нет сил» и «Тяжело»: сразу молитва с чтением по теме
+    body.push(h('section', { class: 'themecard', 'aria-label': 'Тема седмицы' },
       h('p', { class: 'kicker' }, 'Седмица'),
       h('p', { class: 'ttl' }, theme.title),
-      v ? h('p', { class: 'tverse' }, v.lines.join(' '), ' ', h('span', { class: 'ref' }, theme.verse)) : null));
+      v ? h('p', { class: 'tverse' }, v.lines.join(' '), ' ', h('span', { class: 'ref' }, theme.verse)) : null,
+      h('div', { class: 'states' }, h('button', { type: 'button', class: 'btn themebtn', onclick: () => openOffice('theme', 'normal', { themeId: theme.id }) }, `Молиться по теме «${theme.title}»`))));
   }
   let sub = off.subtitle || '';
   if (cur === 'morning') {
@@ -124,11 +126,10 @@ function screenNow() {
 // ——— «Чины» ———
 function screenOrders() {
   const st = store.settings();
-  const list = C.orders.offices.filter((o) => !o.hidden && (o.id !== 'night' || st.night || true));
+  const list = C.orders.offices.filter((o) => !o.hidden);
   page('orders', 'Чины', list.map((o) => h('section', { class: 'card' },
     h('h2', {}, o.title), o.when ? h('p', { class: 'when' }, o.when) : null,
     o.subtitle ? h('p', { class: 'subtitle' }, o.subtitle) : null,
-    o.id === 'night' && !st.night ? h('p', { class: 'muted' }, 'Не входит в «Сегодня» — включается в настройках.') : null,
     stateButtons(o.id, { big: false }))));
 }
 
@@ -277,7 +278,6 @@ function screenSettings() {
     seg('Молитва не повторяется', 'noRepeatDays', [[7, '7 дней'], [14, '14 дней'], [21, '21 день'], [30, '30 дней']]),
     toggle('Псалмы часа', 'pinPsalms', 'Пс 62 утром и Пс 140 вечером. Если выключить — только Псалтирь по порядку.'),
     toggle('Дневные часы', 'hours', 'Третий, шестой и девятый — по 1–2 минуты.'),
-    toggle('Полунощная молитва', 'night', 'Чтобы встать среди ночи.'),
     toggle('Не гасить экран во время молитвы', 'wakeLock'),
     toggle('Мягкий звук в конце тишины', 'silenceSound'),
     toggle('Лёгкая вибрация в конце тишины', 'silenceVibrate'),

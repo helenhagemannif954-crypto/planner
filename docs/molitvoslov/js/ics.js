@@ -10,7 +10,7 @@ function stamp(d) {
 }
 
 export function buildIcs(st, offices) {
-  const ids = ['morning', ...(st.hours ? ['third', 'sixth', 'ninth'] : []), 'evening', 'sleep', ...(st.night ? ['night'] : [])];
+  const ids = ['morning', ...(st.hours ? ['third', 'sixth', 'ninth'] : []), 'evening', 'sleep'];
   const title = Object.fromEntries(offices.map((o) => [o.id, o.title]));
   const today = new Date();
   const ymd = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;

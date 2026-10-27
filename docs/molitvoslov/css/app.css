@@ -81,8 +81,8 @@ button { cursor: pointer; }
 
 .themecard {
   margin: 18px 0 0; padding: 14px 16px; border-radius: 14px; background: var(--paper); box-shadow: var(--shadow);
-  cursor: pointer;
 }
+.themecard .themebtn { flex: 1 1 100%; }
 .themecard .ttl { margin: 0; font-size: 18px; }
 .tverse { margin: 6px 0 0; color: var(--ink2); font-style: italic; font-size: 15.5px; line-height: 1.45; }
 .tverse .ref, .ref { font-style: normal; color: var(--ink3); font-size: .8em; white-space: nowrap; }
