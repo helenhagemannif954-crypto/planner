@@ -288,7 +288,8 @@ const B = {
 
   dismissal(b) {
     const sec = h('section', { class: 'block dismissal' });
-    if (b.bless) sec.append(stanzas(b.bless.lines, 'stanza bless'), h('p', { class: 'ref' }, b.bless.ref));
+    // stanzas() возвращает массив абзацев — его нужно развернуть, иначе append напишет «[object HTMLParagraphElement]»
+    if (b.bless) sec.append(...stanzas(b.bless.lines, 'stanza bless'), h('p', { class: 'ref' }, b.bless.ref));
     if (b.line) sec.append(h('p', { class: 'direction end' }, b.line));
     return tappable(sec, b);
   },

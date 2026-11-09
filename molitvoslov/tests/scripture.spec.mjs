@@ -107,3 +107,26 @@ test('длинное чтение крупным шрифтом засчитыв
   await open(page, 'pray/evening/normal', '2026-10-27T19:00');
   await expect(page.locator('.pray .block.word')).toContainText('Утреннее слово');
 });
+
+test('ни в одном чине нет «[object …]» вместо текста, а у благословения в отпусте — сам стих', async ({ page }) => {
+  const orders = JSON.parse((await import('node:fs')).readFileSync(new URL('../../docs/molitvoslov/content/orders.json', import.meta.url)));
+  const errors = errorsOf(page);
+  for (const day of ['2026-10-27', '2026-04-12', '2026-03-04']) {
+    for (const off of orders.offices) {
+      for (const state of Array.isArray(off.states) ? off.states : off.states === false ? ['normal'] : ['normal', 'weary', 'hard']) {
+        await open(page, `pray/${off.id}/${state}`, `${day}T08:00`);
+        const t = await page.locator('.pray').innerText();
+        expect(t, `${day} ${off.id}/${state}`).not.toMatch(/\[object|undefined|NaN/);
+        // благословение: строка-ссылка, а над ней — сам текст стиха
+        for (const d of await page.locator('.pray .block.dismissal').all()) {
+          const bless = d.locator('.stanza.bless');
+          if (await d.locator('.ref').count()) {
+            await expect(bless, `${off.id}/${state}: текст благословения`).toHaveCount(1);
+            expect((await bless.innerText()).trim().length).toBeGreaterThan(15);
+          }
+        }
+      }
+    }
+  }
+  expect(errors).toEqual([]);
+});
