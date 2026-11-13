@@ -1,6 +1,6 @@
 // Service worker молитвослова: всё приложение и все тексты — в кэше, работа без сети.
 // Данные человека (localStorage) он не трогает.
-const VERSION = 'm-d62194105e';
+const VERSION = 'm-8936f9be42';
 const CACHE = 'molitvoslov-' + VERSION;
 const FILES = [
   './',
