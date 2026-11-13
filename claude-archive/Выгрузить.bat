@@ -8,5 +8,5 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-py -3 claude_archive.py
+py -3 claude_archive.py "%~1"
 pause
